@@ -1,0 +1,45 @@
+# MNIST 联邦学习基线实验配置
+
+# 实验基本设置
+experiment:
+  name: "mnist_fedavg"
+  rounds: 10  
+  seed: 42
+
+# 设备配置
+device: "auto"  # auto: 自动检测GPU, cuda: 强制GPU, cpu: 强制CPU
+
+# WandB 配置
+wandb:
+  enabled: false
+  project: "federated-learning-baseline"
+  offline: true  # 是否离线模式
+
+# 客户端设置
+client:
+  num_clients: 10      
+  samples_per_client: 6000  # 样本
+  local_epochs: 2       # 本地训练轮数
+  learning_rate: 0.01   # 学习率
+  
+# 服务器设置  
+server:
+  aggregation_method: "federated_avg"  # FedAvg算法
+  server_learning_rate: 1.0  # 服务器学习率
+
+# 模型设置
+model:
+  type: "cnn"  # CNN模型
+  learning_rate: 0.01
+
+# 数据设置 - IID分布（数据打乱后均匀分配）
+data:
+  dataset: "mnist"
+  data_dir: "/home/zzm/dataset/"
+  batch_size: 10     # 论文中使用较小的批次大小
+  distribution: "iid"  # IID数据分布
+  total_samples: 60000  # MNIST训练集总样本数
+
+# 评估设置
+evaluation:
+  evaluate_every: 1  # 每10轮评估一次

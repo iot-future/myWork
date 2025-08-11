@@ -1,0 +1,38 @@
+# 默认实验配置文件
+
+# 实验基本设置
+experiment:
+  name: "federated_learning_experiment"
+  rounds: 10
+  seed: 42
+
+# WandB 配置
+wandb:
+  enabled: false  # 是否启用WandB
+  project: "federated-learning"
+
+# 客户端设置
+client:
+  num_clients: 5
+  local_epochs: 5
+  learning_rate: 0.01
+  
+# 服务器设置  
+server:
+  aggregation_method: "federated_avg"
+
+# 模型设置
+model:
+  type: "cnn"  # 可选: "cnn", "linear"
+  learning_rate: 0.01
+
+# 数据设置
+data:
+  dataset: "mnist"
+  data_dir: "./data"
+  batch_size: 32
+
+# 评估设置
+evaluation:
+  evaluate_every: 1  # 每隔多少轮评估一次
+  test_batch_size: 100
