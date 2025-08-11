@@ -68,7 +68,8 @@ class ExperimentRunner:
         # 创建数据加载器
         data_loader = FederatedDataLoader(
             num_clients=client_config['num_clients'],
-            batch_size=data_config['batch_size']
+            batch_size=data_config['batch_size'],
+            data_root=data_config.get('data_dir', './data')
         )
         
         # 客户端样本数（可选参数，用于基线实验）

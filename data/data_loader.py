@@ -71,7 +71,7 @@ class SimpleDataset(Dataset):
 class FederatedDataLoader:
     """联邦学习数据加载器"""
     
-    def __init__(self, num_clients: int, batch_size: int = 32, data_transform: Optional[Callable] = None):
+    def __init__(self, num_clients: int, batch_size: int = 32, data_transform: Optional[Callable] = None, data_root: str = "./data"):
         """
         初始化联邦数据加载器
         
@@ -79,32 +79,39 @@ class FederatedDataLoader:
             num_clients: 客户端数量
             batch_size: 批次大小
             data_transform: 数据变换函数，用于将数据转换为模型期望的格式
+            data_root: 数据存储根目录
         """
         self.num_clients = num_clients
         self.batch_size = batch_size
         self.data_transform = data_transform or DataTransforms.for_linear_model
+        self.data_root = data_root
         self.client_data = {}
     
     def load_mnist_dataset(self,
                           random_state: int = 42,
-                          samples_per_client: Optional[int] = None) -> Tuple[List[DataLoader], DataLoader]:
+                          samples_per_client: Optional[int] = None,
+                          data_root: Optional[str] = None) -> Tuple[List[DataLoader], DataLoader]:
         """
         加载MNIST数据集（支持IID数据分布）
         
         Args:
             random_state: 随机种子
             samples_per_client: 每个客户端的样本数量（用于基线实验）
+            data_root: 数据根目录，如果为None则使用实例的data_root
             
         Returns:
             (客户端数据加载器列表, 测试数据加载器)
         """
+        # 使用传入的data_root参数或实例的data_root
+        dataset_root = data_root if data_root is not None else self.data_root
+        
         transform = transforms.Compose([
             transforms.ToTensor(),
             transforms.Normalize((0.5,), (0.5,))
         ])
         
-        train_dataset = datasets.MNIST('/home/zzm/dataset/', train=True, download=True, transform=transform)
-        test_dataset = datasets.MNIST('/home/zzm/dataset/', train=False, download=True, transform=transform)
+        train_dataset = datasets.MNIST(dataset_root, train=True, download=True, transform=transform)
+        test_dataset = datasets.MNIST(dataset_root, train=False, download=True, transform=transform)
         
         # 提取训练数据
         X_train, y_train = self._extract_from_dataset(train_dataset)

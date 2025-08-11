@@ -1,14 +1,14 @@
 # 数据使用指南
 
-本文档介绍如何在联邦学习框架中使用真实数据集。
+本文档介绍联邦学习框架中的数据加载和处理功能。
 
-## 支持的数据类型
+## 支持的数据集
 
-### 1. CSV文件数据集
+框架目前支持MNIST手写数字识别数据集，这是联邦学习研究中最常用的基准数据集。
 
-框架支持从CSV文件加载结构化数据。
+### MNIST数据集加载
 
-#### 使用方法
+#### 基本用法
 
 ```python
 from data.data_loader import FederatedDataLoader
@@ -16,212 +16,129 @@ from data.data_loader import FederatedDataLoader
 # 创建数据加载器
 data_loader = FederatedDataLoader(num_clients=3, batch_size=32)
 
-# 加载CSV数据
-client_dataloaders, test_dataloader = data_loader.load_csv_data(
-    csv_path="./data/your_dataset.csv",
-    target_column="target",           # 目标列名
-    data_type="classification",       # "classification" 或 "regression"
-    test_size=0.2,                   # 测试集比例
-    random_state=42,                 # 随机种子
-    iid=True                         # 是否使用IID数据分布
+# 加载MNIST数据集
+client_dataloaders, test_dataloader = data_loader.load_mnist_dataset(
+    random_state=42
 )
 ```
 
-#### CSV文件要求
+#### 基线实验模式
 
-- 第一行应为列名
-- 目标列包含分类标签或回归值
-- 缺失值会被自动处理（填充为0）
-- 分类标签会自动编码为数字
-
-#### 示例CSV格式
-
-```csv
-feature1,feature2,feature3,target
-1.2,3.4,5.6,class_A
-2.1,4.3,6.5,class_B
-3.0,5.2,7.4,class_A
-...
-```
-
-### 2. 图像数据集
-
-支持从文件夹结构加载图像数据，每个子文件夹代表一个类别。
-
-#### 使用方法
+支持每个客户端固定样本数的设置，用于重现经典联邦学习论文的实验配置：
 
 ```python
-# 加载图像数据
-client_dataloaders, test_dataloader = data_loader.load_image_data(
-    data_dir="./data/images/",       # 图像文件夹路径
-    data_type="classification",      # 数据类型
-    test_size=0.2,                  # 测试集比例
-    random_state=42,                # 随机种子
-    iid=True,                       # 数据分布
-    image_size=(32, 32)             # 图像尺寸
+# 每个客户端使用固定数量的样本
+client_dataloaders, test_dataloader = data_loader.load_mnist_dataset(
+    random_state=42,
+    samples_per_client=600  # 每个客户端600个样本
 )
 ```
 
-#### 文件夹结构示例
+## 数据变换
 
-```
-data/images/
-├── class_1/
-│   ├── image1.jpg
-│   ├── image2.jpg
-│   └── ...
-├── class_2/
-│   ├── image3.jpg
-│   ├── image4.jpg
-│   └── ...
-└── class_3/
-    ├── image5.jpg
-    └── ...
-```
+框架支持多种数据变换，适配不同的模型架构：
 
-### 3. 内置数据集
+### 数据变换类型
 
-支持常用的机器学习数据集，如MNIST、CIFAR-10等。
-
-#### 使用方法
-
+#### 线性模型变换（默认）
 ```python
-# 加载内置数据集
-client_dataloaders, test_dataloader = data_loader.load_built_in_dataset(
-    dataset_name="mnist",           # "mnist", "cifar10", "fashion_mnist"
-    data_type="classification",     # 数据类型
-    random_state=42,               # 随机种子
-    iid=False                      # Non-IID分布更符合实际场景
+from data.data_loader import DataTransforms
+
+# 默认变换，将数据保持为展平格式
+data_loader = FederatedDataLoader(
+    num_clients=3,
+    data_transform=DataTransforms.for_linear_model
 )
 ```
 
-#### 支持的内置数据集
-
-- **MNIST**: 手写数字识别数据集
-- **CIFAR-10**: 自然图像分类数据集
-- **Fashion-MNIST**: 时尚用品图像分类数据集
-
-## 数据分布模式
-
-### IID分布 (Independent and Identically Distributed)
-
-数据在各客户端间随机分布，每个客户端的数据分布相似。
-
+#### CNN模型变换
 ```python
-iid=True  # 使用IID分布
+# 将展平数据重新整形为图像格式 (batch, 1, 28, 28)
+data_loader = FederatedDataLoader(
+    num_clients=3,
+    data_transform=DataTransforms.for_cnn_model
+)
 ```
 
-**特点:**
-- 各客户端数据分布相似
-- 训练较为稳定
-- 不太符合实际联邦学习场景
-
-### Non-IID分布
-
-数据在各客户端间非均匀分布，更符合实际应用场景。
-
+#### RNN模型变换
 ```python
-iid=False  # 使用Non-IID分布
+# 将数据整形为序列格式
+data_loader = FederatedDataLoader(
+    num_clients=3,
+    data_transform=lambda data: DataTransforms.for_rnn_model(data, sequence_length=28)
+)
 ```
 
-**特点:**
-- 各客户端数据分布不同
-- 更符合真实联邦学习场景
-- 训练更具挑战性
-- 需要更好的聚合策略
+## 数据分布
 
-## 示例数据集
+框架支持IID（独立同分布）数据分布模式：
 
-框架提供了几个示例数据集的自动下载功能：
+### IID分布
+- 数据在各客户端间随机均匀分布
+- 每个客户端的数据分布相似
+- 适合初期实验和算法验证
 
-### 下载示例数据集
+### 分布模式
 
-```python
-from data.data_loader import download_sample_data
-
-# 下载鸢尾花数据集
-iris_path = download_sample_data("iris")
-
-# 下载葡萄酒数据集
-wine_path = download_sample_data("wine")
-
-# 下载波士顿房价数据集（回归）
-boston_path = download_sample_data("boston")
-```
-
-### 可用的示例数据集
-
-| 数据集名称 | 类型 | 描述 | 目标列 |
-|-----------|------|------|--------|
-| iris | 分类 | 鸢尾花数据集 | species |
-| wine | 分类 | 葡萄酒分类数据集 | class |
-| boston | 回归 | 波士顿房价数据集 | medv |
+1. **标准IID分布**: 将所有训练数据随机分配给各客户端
+2. **基线IID分布**: 每个客户端使用固定数量的样本（用于重现论文实验）
 
 ## 数据预处理
 
-框架自动进行以下预处理步骤：
+### MNIST预处理流程
+1. **标准化**: 将像素值归一化到 [-1, 1] 范围
+2. **张量转换**: 转换为PyTorch张量格式
+3. **数据展平**: 将28×28图像展平为784维向量（可选，取决于模型类型）
+4. **分类标签**: 自动转换为LongTensor格式
 
-### 特征预处理
-- **缺失值处理**: 用0填充NaN值
-- **标准化**: 使用StandardScaler进行特征标准化
-- **类型转换**: 自动转换为适当的数据类型
-
-### 标签预处理
-- **分类标签编码**: 自动将文本标签编码为数字
-- **回归标签**: 保持原始数值格式
-
-## 完整示例
-
-### 基本CSV数据集示例
+## 完整使用示例
 
 ```python
-from data.data_loader import FederatedDataLoader, download_sample_data
+from data.data_loader import FederatedDataLoader, DataTransforms
 from core.client import FederatedClient
 from core.server import FederatedServer
 from models.base import SimpleClassificationModel
 from communication.local import LocalCommunication
 from aggregation.federated_avg import FederatedAveraging
 
-# 1. 下载并加载数据
-data_path = download_sample_data("iris")
-data_loader = FederatedDataLoader(num_clients=3, batch_size=16)
-
-client_dataloaders, test_dataloader = data_loader.load_csv_data(
-    csv_path=data_path,
-    target_column="species",
-    data_type="classification",
-    test_size=0.2,
-    random_state=42,
-    iid=True
+# 1. 创建数据加载器（适配线性模型）
+data_loader = FederatedDataLoader(
+    num_clients=3,
+    batch_size=32,
+    data_transform=DataTransforms.for_linear_model
 )
 
-# 2. 获取数据维度
-sample_batch = next(iter(client_dataloaders[0]))
-n_features = sample_batch[0].shape[1]
-n_classes = len(torch.unique(sample_batch[1]))
+# 2. 加载MNIST数据集
+client_dataloaders, test_dataloader = data_loader.load_mnist_dataset(
+    random_state=42,
+    samples_per_client=600  # 可选：每个客户端固定样本数
+)
 
-# 3. 创建模型和服务器
-global_model = SimpleClassificationModel(n_features, n_classes, 0.01)
+# 3. 获取数据维度信息
+sample_batch = next(iter(client_dataloaders[0]))
+n_features = sample_batch[0].shape[1]  # 784 (28*28)
+n_classes = 10  # MNIST有10个数字类别
+
+# 4. 创建全局模型和服务器
+global_model = SimpleClassificationModel(n_features, n_classes)
 server = FederatedServer(global_model, FederatedAveraging())
 
-# 4. 创建客户端
+# 5. 创建客户端
 clients = []
 communication = LocalCommunication()
 
 for i in range(3):
     client_id = f"client_{i}"
-    client_model = SimpleClassificationModel(n_features, n_classes, 0.01)
+    client_model = SimpleClassificationModel(n_features, n_classes)
     client = FederatedClient(
         client_id=client_id,
         model=client_model,
-        data_loader=client_dataloaders[i],
-        epochs=1,
-        learning_rate=0.01
+        data_loader=client_dataloaders[i]
     )
     clients.append(client)
     communication.register_client(client_id)
 
-# 5. 执行联邦学习
+# 6. 执行联邦学习
 for round_num in range(1, 6):
     # 获取全局模型参数
     global_params = server.send_global_model()
@@ -232,7 +149,6 @@ for round_num in range(1, 6):
     for client in clients:
         messages = communication.receive_from_server(client.client_id)
         latest_params = messages[-1] if messages else global_params
-        
         updated_params = client.train(latest_params)
         communication.send_to_server(client.client_id, updated_params)
         client_updates.append(updated_params)
@@ -240,68 +156,87 @@ for round_num in range(1, 6):
     # 服务器聚合
     server.aggregate(client_updates)
     
-    # 评估
+    # 评估模型
     eval_results = server.evaluate_with_dataloader(test_dataloader)
     print(f"Round {round_num}: {eval_results}")
     
     communication.clear_buffers()
 ```
 
-## 性能优化建议
+## 数据统计与监控
 
-### 1. 批次大小选择
-- 较小的批次大小 (16-32) 适合小数据集
-- 较大的批次大小 (64-128) 适合大数据集
-- 考虑客户端的计算能力
+### 获取数据统计信息
 
-### 2. 数据分布选择
-- 初期实验使用IID分布
-- 实际部署使用Non-IID分布
-- 根据应用场景调整分布策略
+```python
+# 获取客户端数据分布统计
+stats = data_loader.get_data_statistics(client_dataloaders)
+print(f"数据统计信息:")
+print(f"- 总客户端数: {stats['total_clients']}")
+print(f"- 总样本数: {stats['total_samples']}")
+print(f"- 平均每客户端样本数: {stats['avg_client_size']:.0f}")
+print(f"- 最小客户端样本数: {stats['min_client_size']}")
+print(f"- 最大客户端样本数: {stats['max_client_size']}")
 
-### 3. 客户端数量
-- 2-10个客户端适合实验环境
-- 实际应用可扩展到更多客户端
-- 考虑通信开销和聚合复杂度
+# 获取详细的客户端数据信息
+client_info = data_loader.get_client_data_info()
+for client_id, info in client_info.items():
+    print(f"{client_id}: {info['size']} 样本")
+```
+
+## 配置建议
+
+### 客户端数量选择
+- **实验环境**: 2-5个客户端，便于调试
+- **性能测试**: 10-20个客户端，测试聚合算法性能
+- **大规模模拟**: 50+个客户端，接近真实场景
+
+### 批次大小选择
+- **小数据集**: 16-32，适合快速迭代
+- **大数据集**: 64-128，提高训练效率
+- **内存受限**: 8-16，避免内存溢出
+
+### 每客户端样本数
+- **基线实验**: 600样本（经典设置）
+- **不平衡实验**: 100-1000样本（模拟真实场景）
+- **大规模实验**: 使用全部数据平均分配
 
 ## 故障排除
 
 ### 常见问题
 
-1. **数据加载失败**
-   - 检查文件路径是否正确
-   - 确认CSV文件格式是否符合要求
-   - 检查目标列名是否存在
+1. **数据下载失败**
+   - 确保网络连接正常
+   - 检查MNIST数据集下载路径权限
+   - 手动下载数据集到指定路径
 
 2. **内存不足**
-   - 减小批次大小
-   - 减少客户端数量
-   - 使用数据采样
+   - 减小批次大小 (`batch_size`)
+   - 减少客户端数量 (`num_clients`)
+   - 使用固定样本数模式 (`samples_per_client`)
 
-3. **维度不匹配**
-   - 确认所有客户端使用相同的特征数量
-   - 检查数据预处理是否一致
+3. **数据形状不匹配**
+   - 检查数据变换函数是否正确
+   - 确认模型输入维度与数据维度匹配
+   - 验证标签格式（分类用LongTensor，回归用FloatTensor）
 
-### 调试建议
+### 调试技巧
 
-1. **数据统计检查**
 ```python
-# 获取数据统计信息
-stats = data_loader.get_data_statistics(client_dataloaders)
-print(f"数据统计: {stats}")
-```
-
-2. **客户端数据检查**
-```python
-# 检查客户端数据分布
+# 1. 检查数据加载器
 for i, dataloader in enumerate(client_dataloaders):
     print(f"客户端 {i}: {len(dataloader.dataset)} 样本")
-```
+    sample_data, sample_label = next(iter(dataloader))
+    print(f"  数据形状: {sample_data.shape}")
+    print(f"  标签形状: {sample_label.shape}")
+    print(f"  标签类型: {sample_label.dtype}")
 
-3. **模型参数检查**
-```python
-# 检查模型参数
-params = model.get_parameters()
-for name, param in params.items():
-    print(f"{name}: {param.shape}")
+# 2. 检查数据范围
+sample_batch = next(iter(client_dataloaders[0]))
+data, labels = sample_batch
+print(f"数据范围: [{data.min():.3f}, {data.max():.3f}]")
+print(f"标签范围: [{labels.min()}, {labels.max()}]")
+
+# 3. 验证数据一致性
+print(f"特征维度: {data.shape[1]}")
+print(f"类别数: {len(torch.unique(labels))}")
 ```
