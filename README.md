@@ -81,7 +81,7 @@ myWork/
 │   ├── data_transform_best_practices.md
 │   ├── refactoring_guide.md
 │   └── wandb_guide.md     # WandB使用指南
-├── run_experiment.py       # 主实验入口
+├── main.py                 # 主实验入口
 ├── quick_start.py          # 快速开始示例
 ├── experiment.py           # 实验模块
 ├── validate_config.py      # 配置验证
@@ -108,17 +108,17 @@ pip install -r requirements.txt
 
 ```bash
 # 使用默认CNN模型和MNIST数据集进行联邦学习
-python run_experiment.py --config configs/mnist.yaml
+python main.py --config configs/mnist.yaml
 
 # 或使用命令行参数自定义配置
-python run_experiment.py --config configs/mnist.yaml --rounds 10 --num-clients 5 --local-epochs 3
+python main.py --config configs/mnist.yaml --rounds 10 --num-clients 5 --local-epochs 3
 ```
 
 #### 快速测试实验
 
 ```bash
 # 运行快速测试（少轮次、少客户端）
-python run_experiment.py --config configs/mnist.yaml --rounds 2 --num-clients 2 --selected-clients 1
+python main.py --config configs/mnist.yaml --rounds 2 --num-clients 2 --selected-clients 1
 ```
 
 #### 使用独立示例脚本
@@ -135,20 +135,20 @@ python examples/run_experiments.py
 
 ```bash
 # 使用Non-IID数据分布进行实验
-python run_experiment.py --config configs/non_iid.yaml
+python main.py --config configs/non_iid.yaml
 ```
 
 ### 3. 使用WandB进行实验跟踪（支持超时处理）
 
 ```bash
 # 使用WandB记录实验结果，支持自动超时处理和离线模式
-python run_experiment.py --config configs/mnist.yaml
+python main.py --config configs/mnist.yaml
 
 # 测试WandB超时处理功能
 python demo_wandb_handling.py --timeout 10 --rounds 3
 
 # 手动设置超时时间
-python run_experiment.py --config configs/mnist.yaml --wandb.init_timeout=120
+python main.py --config configs/mnist.yaml --wandb.init_timeout=120
 ```
 
 **WandB 特色功能**：
@@ -163,7 +163,7 @@ python run_experiment.py --config configs/mnist.yaml --wandb.init_timeout=120
 
 ```bash
 # 标准CNN联邦学习实验（推荐配置）
-python run_experiment.py --config configs/mnist.yaml
+python main.py --config configs/mnist.yaml
 
 # 详细参数说明：
 # - 使用CNN模型进行图像分类
@@ -179,16 +179,16 @@ python run_experiment.py --config configs/mnist.yaml
 
 ```bash
 # 调整轮数和客户端数量
-python run_experiment.py --config configs/mnist.yaml --rounds 15 --num-clients 8 --selected-clients 4
+python main.py --config configs/mnist.yaml --rounds 15 --num-clients 8 --selected-clients 4
 
 # 调整学习参数
-python run_experiment.py --config configs/mnist.yaml --learning-rate 0.001 --local-epochs 5
+python main.py --config configs/mnist.yaml --learning-rate 0.001 --local-epochs 5
 
 # 使用IID数据分布
-python run_experiment.py --config configs/mnist.yaml --iid
+python main.py --config configs/mnist.yaml --iid
 
 # 快速验证实验
-python run_experiment.py --config configs/mnist.yaml --rounds 3 --num-clients 3 --selected-clients 2
+python main.py --config configs/mnist.yaml --rounds 3 --num-clients 3 --selected-clients 2
 ```
 
 ### 使用独立示例脚本

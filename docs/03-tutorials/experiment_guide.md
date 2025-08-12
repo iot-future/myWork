@@ -2,23 +2,23 @@
 
 ## 概述
 
-`run_experiment.py` 是联邦学习框架的统一实验入口，支持通过YAML配置文件和命令行参数来配置和运行实验。
+`main.py` 是联邦学习框架的统一实验入口，支持通过YAML配置文件和命令行参数来配置和运行实验。
 
 ## 快速开始
 
 ### 1. 使用默认配置运行
 ```bash
-python run_experiment.py
+python main.py
 ```
 
 ### 2. 使用指定配置文件
 ```bash
-python run_experiment.py --config configs/mnist.yaml
+python main.py --config configs/mnist.yaml
 ```
 
 ### 3. 使用命令行参数覆盖配置
 ```bash
-python run_experiment.py --config configs/default.yaml --rounds 10 --num-clients 5 --learning-rate 0.001
+python main.py --config configs/default.yaml --rounds 10 --num-clients 5 --learning-rate 0.001
 ```
 
 ## 配置文件
@@ -79,27 +79,27 @@ evaluation:
 
 ### 1. 快速测试实验
 ```bash
-python run_experiment.py --rounds 3 --num-clients 2 --selected-clients 1
+python main.py --rounds 3 --num-clients 2 --selected-clients 1
 ```
 
 ### 2. MNIST数据集实验
 ```bash
-python run_experiment.py --config configs/mnist.yaml --rounds 20
+python main.py --config configs/mnist.yaml --rounds 20
 ```
 
 ### 3. Non-IID数据分布实验
 ```bash
-python run_experiment.py --non-iid --rounds 15 --num-clients 8
+python main.py --non-iid --rounds 15 --num-clients 8
 ```
 
 ### 4. 自定义学习率实验
 ```bash
-python run_experiment.py --learning-rate 0.001 --batch-size 64
+python main.py --learning-rate 0.001 --batch-size 64
 ```
 
 ### 5. 大规模实验
 ```bash
-python run_experiment.py --config configs/mnist.yaml --num-clients 20 --selected-clients 10 --rounds 50
+python main.py --config configs/mnist.yaml --num-clients 20 --selected-clients 10 --rounds 50
 ```
 
 ## 输出结果

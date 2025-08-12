@@ -53,7 +53,7 @@ optimizer:
 
 ```bash
 # 使用CLIP模型
-python run_experiment.py --config configs/clip.yaml
+python main.py --config configs/clip.yaml
 ```
 
 ### 3. 代码示例

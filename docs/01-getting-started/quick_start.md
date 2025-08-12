@@ -37,7 +37,7 @@ pip install -r requirements.txt
 
 ```bash
 # 基本的 CNN 联邦学习实验
-python run_experiment.py --config configs/mnist.yaml
+python main.py --config configs/mnist.yaml
 ```
 
 这将：
@@ -51,7 +51,7 @@ python run_experiment.py --config configs/mnist.yaml
 
 ```bash
 # 使用命令行参数覆盖配置文件设置
-python run_experiment.py --config configs/mnist.yaml \
+python main.py --config configs/mnist.yaml \
     --rounds 10 \
     --num-clients 5 \
     --local-epochs 5 \
@@ -59,7 +59,7 @@ python run_experiment.py --config configs/mnist.yaml \
     --batch-size 64
 
 # 快速测试（少轮次、少客户端）
-python run_experiment.py --config configs/default.yaml \
+python main.py --config configs/default.yaml \
     --rounds 2 \
     --num-clients 2
 ```
@@ -68,10 +68,10 @@ python run_experiment.py --config configs/default.yaml \
 
 ```bash
 # 使用默认配置
-python run_experiment.py --config configs/default.yaml
+python main.py --config configs/default.yaml
 
 # 使用 CLIP 模型配置（多模态联邦学习）
-python run_experiment.py --config configs/clip.yaml
+python main.py --config configs/clip.yaml
 ```
 
 ## 支持的功能特性

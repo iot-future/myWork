@@ -94,13 +94,13 @@ optimizer = OptimizerFactory.create_optimizer(model.parameters(), config)
 
 ```bash
 # 使用SGD优化器
-python run_experiment.py --config configs/default.yaml
+python main.py --config configs/default.yaml
 
 # 使用Adam优化器  
-python run_experiment.py --config configs/mnist_adam.yaml
+python main.py --config configs/mnist_adam.yaml
 
 # 使用AdamW优化器
-python run_experiment.py --config configs/mnist_adamw.yaml
+python main.py --config configs/mnist_adamw.yaml
 ```
 
 ### 2. 命令行覆盖配置

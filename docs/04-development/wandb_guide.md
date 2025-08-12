@@ -40,7 +40,7 @@ wandb:
 ### 基本使用
 
 ```bash
-python run_experiment.py --config configs/mnist.yaml
+python main.py --config configs/mnist.yaml
 ```
 
 ## 记录的指标

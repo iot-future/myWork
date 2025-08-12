@@ -6,7 +6,7 @@
 
 ## 模块结构
 
-### 1. `run_experiment.py` - 主入口文件
+### 1. `main.py` - 主入口文件
 - **职责**: 协调各个模块，提供简洁的实验流程
 - **特点**: 
   - 代码量从305行减少到约50行
@@ -73,13 +73,13 @@
 
 ```bash
 # 使用默认配置
-python run_experiment.py
+python main.py
 
 # 使用指定配置文件
-python run_experiment.py --config configs/mnist.yaml
+python main.py --config configs/mnist.yaml
 
 # 命令行参数覆盖
-python run_experiment.py --config configs/default.yaml --rounds 20 --num-clients 10
+python main.py --config configs/default.yaml --rounds 20 --num-clients 10
 ```
 
 ## 扩展指南
