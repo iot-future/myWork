@@ -1,7 +1,12 @@
 from abc import ABC, abstractmethod
 from typing import Dict, Any, List
 import copy
-
+"""
+ABC (Abstract Base Class) 是 Python 中用于创建抽象基类的工具
+它的主要作用包括：
+    通过 @abstractmethod 装饰器标记的方法必须在子类中实现，否则无法实例化该子类
+    提供一个统一的接口规范，确保所有子类都实现了特定的方法
+"""
 class BaseClient(ABC):
     """客户端基类"""
     

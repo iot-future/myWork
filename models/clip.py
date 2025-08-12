@@ -1,6 +1,6 @@
 """
 CLIP (Contrastive Language-Image Pre-training) 模型实现
-适用于联邦学习场景的CLIP模型
+基于 Hugging Face transformers 的精简实现，适用于联邦学习场景
 
 参考论文：
 Learning Transferable Visual Representations with Natural Language Supervision
@@ -10,314 +10,134 @@ Radford et al., 2021
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Dict, Any, Tuple, Optional
+from typing import Dict, Any, Tuple, Optional, Union
 from core.base import BaseModel
-import math
-
-
-class MultiHeadAttention(nn.Module):
-    """多头注意力机制"""
-    
-    def __init__(self, d_model: int, n_heads: int, dropout: float = 0.1):
-        super().__init__()
-        assert d_model % n_heads == 0
-        
-        self.d_model = d_model
-        self.n_heads = n_heads
-        self.d_k = d_model // n_heads
-        
-        self.w_q = nn.Linear(d_model, d_model)
-        self.w_k = nn.Linear(d_model, d_model)
-        self.w_v = nn.Linear(d_model, d_model)
-        self.w_o = nn.Linear(d_model, d_model)
-        
-        self.dropout = nn.Dropout(dropout)
-        
-    def scaled_dot_product_attention(self, q, k, v, mask=None):
-        """缩放点积注意力"""
-        scores = torch.matmul(q, k.transpose(-2, -1)) / math.sqrt(self.d_k)
-        
-        if mask is not None:
-            scores.masked_fill_(mask == 0, -1e9)
-        
-        attention_weights = F.softmax(scores, dim=-1)
-        attention_weights = self.dropout(attention_weights)
-        
-        output = torch.matmul(attention_weights, v)
-        return output, attention_weights
-    
-    def forward(self, query, key, value, mask=None):
-        batch_size = query.size(0)
-        
-        # 线性变换并重塑为多头格式
-        q = self.w_q(query).view(batch_size, -1, self.n_heads, self.d_k).transpose(1, 2)
-        k = self.w_k(key).view(batch_size, -1, self.n_heads, self.d_k).transpose(1, 2)
-        v = self.w_v(value).view(batch_size, -1, self.n_heads, self.d_k).transpose(1, 2)
-        
-        # 应用注意力
-        attention_output, _ = self.scaled_dot_product_attention(q, k, v, mask)
-        
-        # 重塑回原格式
-        attention_output = attention_output.transpose(1, 2).contiguous().view(
-            batch_size, -1, self.d_model
-        )
-        
-        return self.w_o(attention_output)
-
-
-class TransformerBlock(nn.Module):
-    """Transformer块"""
-    
-    def __init__(self, d_model: int, n_heads: int, d_ff: int, dropout: float = 0.1):
-        super().__init__()
-        
-        self.attention = MultiHeadAttention(d_model, n_heads, dropout)
-        self.norm1 = nn.LayerNorm(d_model)
-        self.norm2 = nn.LayerNorm(d_model)
-        
-        self.feed_forward = nn.Sequential(
-            nn.Linear(d_model, d_ff),
-            nn.GELU(),
-            nn.Linear(d_ff, d_model),
-            nn.Dropout(dropout)
-        )
-        
-        self.dropout = nn.Dropout(dropout)
-        
-    def forward(self, x, mask=None):
-        # 多头注意力 + 残差连接
-        attn_output = self.attention(x, x, x, mask)
-        x = self.norm1(x + self.dropout(attn_output))
-        
-        # 前馈网络 + 残差连接
-        ff_output = self.feed_forward(x)
-        x = self.norm2(x + ff_output)
-        
-        return x
-
-
-class VisionTransformer(nn.Module):
-    """视觉Transformer编码器"""
-    
-    def __init__(self, 
-                 img_size: int = 224,
-                 patch_size: int = 32,
-                 in_channels: int = 3,
-                 d_model: int = 512,
-                 n_layers: int = 12,
-                 n_heads: int = 8,
-                 d_ff: int = 2048,
-                 dropout: float = 0.1):
-        super().__init__()
-        
-        self.img_size = img_size
-        self.patch_size = patch_size
-        self.n_patches = (img_size // patch_size) ** 2
-        
-        # Patch嵌入
-        self.patch_embed = nn.Conv2d(
-            in_channels, d_model, kernel_size=patch_size, stride=patch_size
-        )
-        
-        # 位置编码
-        self.pos_embed = nn.Parameter(
-            torch.randn(1, self.n_patches + 1, d_model) * 0.02
-        )
-        
-        # CLS token
-        self.cls_token = nn.Parameter(torch.randn(1, 1, d_model) * 0.02)
-        
-        # Transformer层
-        self.transformer_layers = nn.ModuleList([
-            TransformerBlock(d_model, n_heads, d_ff, dropout)
-            for _ in range(n_layers)
-        ])
-        
-        self.dropout = nn.Dropout(dropout)
-        self.norm = nn.LayerNorm(d_model)
-        
-    def forward(self, x):
-        batch_size = x.size(0)
-        
-        # Patch嵌入
-        x = self.patch_embed(x)  # (B, d_model, H//patch_size, W//patch_size)
-        x = x.flatten(2).transpose(1, 2)  # (B, n_patches, d_model)
-        
-        # 添加CLS token
-        cls_tokens = self.cls_token.expand(batch_size, -1, -1)
-        x = torch.cat([cls_tokens, x], dim=1)  # (B, n_patches+1, d_model)
-        
-        # 添加位置编码
-        x = x + self.pos_embed
-        x = self.dropout(x)
-        
-        # Transformer层
-        for layer in self.transformer_layers:
-            x = layer(x)
-        
-        x = self.norm(x)
-        
-        # 返回CLS token的表示
-        return x[:, 0]  # (B, d_model)
-
-
-class TextTransformer(nn.Module):
-    """文本Transformer编码器"""
-    
-    def __init__(self,
-                 vocab_size: int = 50000,
-                 max_len: int = 77,
-                 d_model: int = 512,
-                 n_layers: int = 12,
-                 n_heads: int = 8,
-                 d_ff: int = 2048,
-                 dropout: float = 0.1):
-        super().__init__()
-        
-        self.max_len = max_len
-        self.d_model = d_model
-        
-        # 词嵌入
-        self.token_embed = nn.Embedding(vocab_size, d_model)
-        
-        # 位置编码
-        self.pos_embed = nn.Parameter(torch.randn(1, max_len, d_model) * 0.02)
-        
-        # Transformer层
-        self.transformer_layers = nn.ModuleList([
-            TransformerBlock(d_model, n_heads, d_ff, dropout)
-            for _ in range(n_layers)
-        ])
-        
-        self.dropout = nn.Dropout(dropout)
-        self.norm = nn.LayerNorm(d_model)
-        
-    def forward(self, text_tokens):
-        seq_len = text_tokens.size(1)
-        
-        # 词嵌入
-        x = self.token_embed(text_tokens)
-        
-        # 添加位置编码
-        x = x + self.pos_embed[:, :seq_len, :]
-        x = self.dropout(x)
-        
-        # Transformer层
-        for layer in self.transformer_layers:
-            x = layer(x)
-        
-        x = self.norm(x)
-        
-        # 使用最后一个非padding token作为句子表示
-        # 这里简化处理，使用序列的最后一个位置
-        return x[:, -1]  # (B, d_model)
+from transformers import (
+    CLIPModel as HFCLIPModel, # Hugging Face 的完整 CLIP 模型实现
+    CLIPProcessor, # CLIP 模型的预处理器
+    CLIPConfig, # CLIP 模型的配置类
+    CLIPVisionModel,
+    CLIPTextModel
+)
+from PIL import Image
+import warnings
 
 
 class CLIPModel(BaseModel):
-    """CLIP模型实现
+    """基于 Hugging Face 的 CLIP 模型实现
     
-    包含图像编码器和文本编码器，通过对比学习训练
+    使用预训练的 CLIP 模型，支持联邦学习场景下的参数聚合和本地训练
     """
     
     def __init__(self, 
-                 img_size: int = 224,
-                 patch_size: int = 32,
-                 in_channels: int = 3,
-                 vocab_size: int = 50000,
-                 max_text_len: int = 77,
-                 d_model: int = 512,
-                 n_layers: int = 12,
-                 n_heads: int = 8,
-                 d_ff: int = 2048,
-                 dropout: float = 0.1,
+                 model_name: str = "openai/clip-vit-base-patch32",
                  temperature: float = 0.07,
-                 optimizer_config: Dict[str, Any] = None):
+                 freeze_vision_encoder: bool = False,
+                 freeze_text_encoder: bool = False,
+                 optimizer_config: Dict[str, Any] = None,
+                 use_pretrained: bool = True):
         """
         初始化CLIP模型
         
         Args:
-            img_size: 输入图像尺寸
-            patch_size: 图像patch大小
-            in_channels: 输入通道数
-            vocab_size: 词汇表大小
-            max_text_len: 最大文本长度
-            d_model: 模型维度
-            n_layers: Transformer层数
-            n_heads: 注意力头数
-            d_ff: 前馈网络维度
-            dropout: Dropout比例
+            model_name: 预训练模型名称 (默认: "openai/clip-vit-base-patch32")
             temperature: 对比学习温度参数
+            freeze_vision_encoder:W 是否冻结视觉编码器
+            freeze_text_encoder: 是否冻结文本编码器  
             optimizer_config: 优化器配置
+            use_pretrained: 是否使用预训练权重
         """
         super().__init__(optimizer_config)
         
+        self.model_name = model_name
         self.temperature = temperature
-        self.d_model = d_model
+        self.freeze_vision_encoder = freeze_vision_encoder
+        self.freeze_text_encoder = freeze_text_encoder
         
-        # 图像编码器
-        self.image_encoder = VisionTransformer(
-            img_size=img_size,
-            patch_size=patch_size,
-            in_channels=in_channels,
-            d_model=d_model,
-            n_layers=n_layers,
-            n_heads=n_heads,
-            d_ff=d_ff,
-            dropout=dropout
-        )
+        # 初始化处理器和模型
+        self.processor = CLIPProcessor.from_pretrained(model_name)
         
-        # 文本编码器
-        self.text_encoder = TextTransformer(
-            vocab_size=vocab_size,
-            max_len=max_text_len,
-            d_model=d_model,
-            n_layers=n_layers,
-            n_heads=n_heads,
-            d_ff=d_ff,
-            dropout=dropout
-        )
+        if use_pretrained:
+            # 加载预训练模型
+            self.model = HFCLIPModel.from_pretrained(model_name)
+        else:
+            # 使用配置创建随机初始化的模型
+            config = CLIPConfig.from_pretrained(model_name)
+            self.model = HFCLIPModel(config)
         
-        # 投影层
-        self.image_projection = nn.Linear(d_model, d_model)
-        self.text_projection = nn.Linear(d_model, d_model)
-        
-        # 将所有组件组合为一个模型
-        self.model = nn.ModuleDict({
-            'image_encoder': self.image_encoder,
-            'text_encoder': self.text_encoder,
-            'image_projection': self.image_projection,
-            'text_projection': self.text_projection
-        })
+        # 冻结指定的编码器
+        if freeze_vision_encoder:
+            for param in self.model.vision_model.parameters():
+                param.requires_grad = False
+                
+        if freeze_text_encoder:
+            for param in self.model.text_model.parameters():
+                param.requires_grad = False
         
         # 创建优化器
-        self.create_optimizer(self.model.parameters())
+        trainable_params = [p for p in self.model.parameters() if p.requires_grad]
+        self.create_optimizer(trainable_params)
         if self.optimizer is None:
-            # 回退到默认AdamW（CLIP通常使用AdamW）
-            self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=1e-4)
+            # 回退到默认AdamW
+            self.optimizer = torch.optim.AdamW(trainable_params, lr=5e-5, weight_decay=0.1)
         
         self.criterion = self.contrastive_loss
         
-    def encode_image(self, images):
-        """编码图像"""
-        image_features = self.image_encoder(images)
-        image_features = self.image_projection(image_features)
+    def encode_image(self, images: Union[torch.Tensor, list]):
+        """编码图像
+        
+        Args:
+            images: 图像张量或PIL图像列表
+            
+        Returns:
+            归一化的图像特征
+        """
+        if isinstance(images, list):
+            # 处理PIL图像列表
+            inputs = self.processor(images=images, return_tensors="pt", padding=True)
+            image_features = self.model.get_image_features(**inputs)
+        else:
+            # 处理张量输入
+            image_features = self.model.get_image_features(pixel_values=images)
+        
         return F.normalize(image_features, dim=-1)
     
-    def encode_text(self, text_tokens):
-        """编码文本"""
-        text_features = self.text_encoder(text_tokens)
-        text_features = self.text_projection(text_features)
+    def encode_text(self, texts: Union[torch.Tensor, list]):
+        """编码文本
+        
+        Args:
+            texts: 文本token张量或字符串列表
+            
+        Returns:
+            归一化的文本特征
+        """
+        if isinstance(texts, list):
+            # 处理字符串列表
+            inputs = self.processor(text=texts, return_tensors="pt", padding=True, truncation=True)
+            text_features = self.model.get_text_features(**inputs)
+        else:
+            # 处理张量输入
+            text_features = self.model.get_text_features(input_ids=texts)
+        
         return F.normalize(text_features, dim=-1)
     
-    def forward(self, images, text_tokens):
+    def forward(self, images, texts):
         """前向传播"""
         image_features = self.encode_image(images)
-        text_features = self.encode_text(text_tokens)
+        text_features = self.encode_text(texts)
         
         return image_features, text_features
     
-    def contrastive_loss(self, image_features, text_features):
-        """对比损失函数"""
+    def contrastive_loss(self, image_features: torch.Tensor, text_features: torch.Tensor) -> torch.Tensor:
+        """对比损失函数
+        
+        Args:
+            image_features: 归一化的图像特征
+            text_features: 归一化的文本特征
+            
+        Returns:
+            对比损失值
+        """
         # 计算相似度矩阵
         logits = torch.matmul(image_features, text_features.t()) / self.temperature
         
@@ -347,66 +167,135 @@ class CLIPModel(BaseModel):
         """单步训练
         
         Args:
-            data: 包含图像和文本的数据元组 (images, text_tokens)
+            data: 包含图像和文本的数据，格式为 (images, texts)
+                 images: PIL图像列表或图像张量
+                 texts: 文本字符串列表或token张量
         """
         self.model.train()
         self.optimizer.zero_grad()
         
-        images, text_tokens = data
+        images, texts = data
         
-        # 前向传播
-        image_features, text_features = self.forward(images, text_tokens)
-        
-        # 计算损失
-        loss = self.contrastive_loss(image_features, text_features)
-        
-        # 反向传播
-        loss.backward()
-        self.optimizer.step()
-        
-        return loss.item()
+        try:
+            # 前向传播
+            image_features, text_features = self.forward(images, texts)
+            
+            # 计算损失
+            loss = self.contrastive_loss(image_features, text_features)
+            
+            # 反向传播
+            loss.backward()
+            
+            # 梯度裁剪
+            torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
+            
+            self.optimizer.step()
+            
+            return loss.item()
+            
+        except Exception as e:
+            print(f"Training step error: {e}")
+            return float('inf')
     
     def evaluate(self, data):
         """评估模型
         
         Args:
-            data: 包含图像和文本的数据元组 (images, text_tokens)
+            data: 包含图像和文本的数据，格式为 (images, texts)
         """
         self.model.eval()
         
         with torch.no_grad():
-            images, text_tokens = data
+            images, texts = data
             
-            # 前向传播
-            image_features, text_features = self.forward(images, text_tokens)
-            
-            # 计算损失
-            loss = self.contrastive_loss(image_features, text_features)
-            
-            # 计算准确率（图像到文本检索）
-            logits = torch.matmul(image_features, text_features.t()) / self.temperature
-            predictions = torch.argmax(logits, dim=1)
-            labels = torch.arange(logits.size(0), device=logits.device)
-            accuracy = (predictions == labels).float().mean()
-        
-        return {
-            'loss': loss.item(),
-            'accuracy': accuracy.item()
-        }
+            try:
+                # 前向传播
+                image_features, text_features = self.forward(images, texts)
+                
+                # 计算损失
+                loss = self.contrastive_loss(image_features, text_features)
+                
+                # 计算准确率（图像到文本检索）
+                logits = torch.matmul(image_features, text_features.t()) / self.temperature
+                predictions = torch.argmax(logits, dim=1)
+                labels = torch.arange(logits.size(0), device=logits.device)
+                accuracy = (predictions == labels).float().mean()
+                
+                # 计算召回率@k
+                top5_acc = self._calculate_recall_at_k(logits, k=5)
+                
+                return {
+                    'loss': loss.item(),
+                    'accuracy': accuracy.item(),
+                    'recall@5': top5_acc
+                }
+                
+            except Exception as e:
+                print(f"Evaluation error: {e}")
+                return {
+                    'loss': float('inf'),
+                    'accuracy': 0.0,
+                    'recall@5': 0.0
+                }
     
-    def zero_shot_classify(self, images, text_features):
+    def _calculate_recall_at_k(self, logits: torch.Tensor, k: int = 5) -> float:
+        """计算 Recall@K 指标"""
+        batch_size = logits.size(0)
+        if k >= batch_size:
+            return 1.0
+            
+        # 获取top-k预测
+        _, topk_indices = torch.topk(logits, k, dim=1)
+        
+        # 创建正确标签
+        labels = torch.arange(batch_size, device=logits.device).unsqueeze(1)
+        
+        # 计算命中率
+        hits = (topk_indices == labels).any(dim=1).float()
+        return hits.mean().item()
+    
+    def zero_shot_classify(self, images, class_texts: list):
         """零样本分类
         
         Args:
-            images: 输入图像
-            text_features: 预计算的文本特征（类别描述）
+            images: 输入图像（PIL列表或张量）
+            class_texts: 类别文本描述列表
+            
+        Returns:
+            分类概率分布
         """
         self.model.eval()
         
         with torch.no_grad():
+            # 编码图像
             image_features = self.encode_image(images)
+            
+            # 编码类别文本
+            text_features = self.encode_text(class_texts)
             
             # 计算相似度
             logits = torch.matmul(image_features, text_features.t()) / self.temperature
             
             return F.softmax(logits, dim=-1)
+    
+    def get_text_embeddings(self, texts: list) -> torch.Tensor:
+        """获取文本嵌入（用于缓存类别描述）"""
+        return self.encode_text(texts)
+    
+    def get_image_embeddings(self, images) -> torch.Tensor:
+        """获取图像嵌入"""
+        return self.encode_image(images)
+    
+    def compute_similarity(self, image_features: torch.Tensor, text_features: torch.Tensor) -> torch.Tensor:
+        """计算图像和文本特征之间的相似度"""
+        return torch.matmul(image_features, text_features.t()) / self.temperature
+    
+    def save_pretrained(self, save_directory: str):
+        """保存模型和处理器"""
+        self.model.save_pretrained(save_directory)
+        self.processor.save_pretrained(save_directory)
+    
+    def load_pretrained(self, load_directory: str):
+        """加载模型和处理器"""
+        self.model = HFCLIPModel.from_pretrained(load_directory)
+        self.processor = CLIPProcessor.from_pretrained(load_directory)

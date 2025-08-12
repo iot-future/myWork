@@ -1,52 +1,72 @@
-# CLIP模型配置文件 - 完整版
+# CLIP模型配置文件 - 基于Hugging Face的精简版
 # 适用于视觉-语言多模态联邦学习任务
 
 experiment:
-  name: "clip_federated_learning"
+  name: "clip_federated_learning_hf"
   rounds: 50
   seed: 42
 
 client:
   num_clients: 10
   local_epochs: 1
-  learning_rate: 1e-4
+  learning_rate: 5e-5  # 使用Hugging Face推荐的学习率
   samples_per_client: null  # null表示使用默认均匀分布
 
 model:
   type: "clip"
   
-  # 图像相关参数
-  img_size: 224
-  patch_size: 32
-  in_channels: 3
+  # Hugging Face模型配置
+  model_name: "openai/clip-vit-base-patch32"  # 可选: openai/clip-vit-large-patch14
+  use_pretrained: true
   
-  # 文本相关参数  
-  vocab_size: 50000
-  max_text_len: 77
-  
-  # 模型架构参数
-  d_model: 512
-  n_layers: 12
-  n_heads: 8
-  d_ff: 2048
-  dropout: 0.1
+  # 联邦学习特殊配置
+  freeze_vision_encoder: false  # 是否冻结视觉编码器
+  freeze_text_encoder: false    # 是否冻结文本编码器
   
   # CLIP特有参数
   temperature: 0.07
 
 optimizer:
-  type: "adamw"
-  learning_rate: 1e-4
-  weight_decay: 0.01
-  betas: [0.9, 0.98]  # CLIP推荐的beta值
+  name: "adamw"
+  lr: 5e-5              # 降低学习率以适应预训练模型微调
+  weight_decay: 0.1     # 更强的权重衰减
+  betas: [0.9, 0.98]    # CLIP推荐的beta值
   eps: 1e-6
 
+# 训练配置
+training:
+  gradient_clip_norm: 1.0    # 梯度裁剪
+  warmup_steps: 1000         # 预热步数
+  
 data:
-  batch_size: 32
+  batch_size: 16             # 较小的批大小以节省内存
+  num_workers: 4
   data_dir: "./data"
+  
+  # 数据预处理（如果需要自定义）
+  image_size: 224
+  normalize: true
 
 aggregation:
   type: "fedavg"
+
+# 评估配置
+evaluation:
+  metrics: ["loss", "accuracy", "recall@5"]
+  eval_frequency: 5          # 每5轮评估一次
+  
+# 日志配置  
+logging:
+  log_level: "INFO"
+  wandb:
+    enabled: false
+    project: "clip-federated-learning"
+
+# 模型保存配置
+checkpointing:
+  save_frequency: 10         # 每10轮保存一次
+  save_path: "./checkpoints/clip"
+  keep_last_n: 3            # 保留最近3个检查点
 
 communication:
   type: "local"
