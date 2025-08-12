@@ -23,35 +23,43 @@ def main():
     config = config_manager.override_config(config, args)
     
     # 打印关键配置信息
-    print("🔧 实验配置:")
-    print(f"  - 实验名称: {config['experiment']['name']}")
-    print(f"  - 训练轮次: {config['experiment']['rounds']}")
-    print(f"  - 客户端数量: {config['client']['num_clients']}")
-    print(f"  - 本地训练轮次: {config['client']['local_epochs']}")
+    print("=" * 60)
+    print("🔧 实验配置")
+    print("=" * 60)
+    print(f"实验名称: {config['experiment']['name']}")
+    print(f"训练轮次: {config['experiment']['rounds']} | 客户端数量: {config['client']['num_clients']} | 本地训练轮次: {config['client']['local_epochs']}")
     
     # 显示优化器配置信息
     optimizer_config = config.get('optimizer', {})
     if optimizer_config:
-        print(f"  - 优化器类型: {optimizer_config.get('type', 'sgd')}")
-        print(f"  - 学习率: {optimizer_config.get('learning_rate', 0.01)}")
+        optimizer_info = f"优化器: {optimizer_config.get('type', 'sgd').upper()} | 学习率: {optimizer_config.get('learning_rate', 0.01)}"
         if optimizer_config.get('momentum'):
-            print(f"  - 动量: {optimizer_config['momentum']}")
+            optimizer_info += f" | 动量: {optimizer_config['momentum']}"
         if optimizer_config.get('weight_decay'):
-            print(f"  - 权重衰减: {optimizer_config['weight_decay']}")
+            optimizer_info += f" | 权重衰减: {optimizer_config['weight_decay']}"
+        print(optimizer_info)
     else:
-        print(f"  - 学习率: {config['client'].get('learning_rate', 0.01)} (使用默认SGD)")
+        print(f"优化器: SGD (默认) | 学习率: {config['client'].get('learning_rate', 0.01)}")
     
-    print(f"  - 批大小: {config['data']['batch_size']}")
+    data_info = f"批大小: {config['data']['batch_size']}"
     if config.get('wandb', {}).get('enabled', False):
-        print(f"  - WandB项目: {config['wandb']['project']}")
-    print()
+        data_info += f" | WandB项目: {config['wandb']['project']}"
+    print(data_info)
+    print("=" * 60)
     
     # 运行实验
+    print("🚀 开始运行实验...")
+    print("-" * 60)
     experiment_runner = ExperimentRunner(config)
     results = experiment_runner.run_experiment()
     
     # 打印结果摘要
+    print()
+    print("=" * 60)
+    print("📊 实验结果摘要")
+    print("=" * 60)
     ResultsHandler.print_experiment_summary(results)
+    print("=" * 60)
 
 
 if __name__ == '__main__':
