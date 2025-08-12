@@ -6,6 +6,7 @@
 from typing import Dict, Any
 from models.cnn import CNNModel
 from models.base import SimpleLinearModel
+from models.clip import CLIPModel
 
 
 class ModelFactory:
@@ -36,10 +37,26 @@ class ModelFactory:
                 output_dim=output_dim,
                 optimizer_config=optimizer_config
             )
+        elif model_type == 'clip':
+            # 完整版CLIP模型
+            return CLIPModel(
+                img_size=model_config.get('img_size', 224),
+                patch_size=model_config.get('patch_size', 32),
+                in_channels=model_config.get('in_channels', 3),
+                vocab_size=model_config.get('vocab_size', 50000),
+                max_text_len=model_config.get('max_text_len', 77),
+                d_model=model_config.get('d_model', 512),
+                n_layers=model_config.get('n_layers', 12),
+                n_heads=model_config.get('n_heads', 8),
+                d_ff=model_config.get('d_ff', 2048),
+                dropout=model_config.get('dropout', 0.1),
+                temperature=model_config.get('temperature', 0.07),
+                optimizer_config=optimizer_config
+            )
         else:
             raise ValueError(f"不支持的模型类型: {model_type}")
     
     @staticmethod
     def get_supported_models():
         """获取支持的模型类型列表"""
-        return ['cnn', 'linear']
+        return ['cnn', 'linear', 'clip']

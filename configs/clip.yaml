@@ -1,0 +1,66 @@
+# CLIP模型配置文件 - 完整版
+# 适用于视觉-语言多模态联邦学习任务
+
+experiment:
+  name: "clip_federated_learning"
+  rounds: 50
+  seed: 42
+
+client:
+  num_clients: 10
+  local_epochs: 1
+  learning_rate: 1e-4
+  samples_per_client: null  # null表示使用默认均匀分布
+
+model:
+  type: "clip"
+  
+  # 图像相关参数
+  img_size: 224
+  patch_size: 32
+  in_channels: 3
+  
+  # 文本相关参数  
+  vocab_size: 50000
+  max_text_len: 77
+  
+  # 模型架构参数
+  d_model: 512
+  n_layers: 12
+  n_heads: 8
+  d_ff: 2048
+  dropout: 0.1
+  
+  # CLIP特有参数
+  temperature: 0.07
+
+optimizer:
+  type: "adamw"
+  learning_rate: 1e-4
+  weight_decay: 0.01
+  betas: [0.9, 0.98]  # CLIP推荐的beta值
+  eps: 1e-6
+
+data:
+  batch_size: 32
+  data_dir: "./data"
+
+aggregation:
+  type: "fedavg"
+
+communication:
+  type: "local"
+
+evaluation:
+  evaluate_every: 5
+
+wandb:
+  enabled: true
+  project: "clip-federated-learning"
+  offline: false
+  tags: 
+    - "clip"
+    - "multimodal"
+    - "federated"
+
+device: "auto"  # 'auto', 'cpu', 'cuda', 'cuda:0'等
