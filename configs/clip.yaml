@@ -1,86 +1,90 @@
-# CLIP模型配置文件 - 基于Hugging Face的精简版
-# 适用于视觉-语言多模态联邦学习任务
+# CLIP模型联邦学习配置文件
 
+# 实验基本设置
 experiment:
-  name: "clip_federated_learning_hf"
-  rounds: 50
+  name: "clip_federated_learning"
+  rounds: 20
   seed: 42
 
+# 设备配置
+device: "auto"  # auto: 自动检测GPU, cuda: 强制GPU, cpu: 强制CPU
+
+# WandB配置
+wandb:
+  enabled: false
+  project: "clip-federated-learning"
+  offline: false
+
+# 客户端设置
 client:
-  num_clients: 10
-  local_epochs: 1
-  learning_rate: 5e-5  # 使用Hugging Face推荐的学习率
+  num_clients: 5
+  local_epochs: 2
+  learning_rate: 0.00005
   samples_per_client: null  # null表示使用默认均匀分布
 
+# 服务器设置
+server:
+  aggregation_method: "federated_avg"
+  server_learning_rate: 1.0
+
+# 模型设置
 model:
   type: "clip"
+  learning_rate: 0.00005
   
   # Hugging Face模型配置
-  model_name: "openai/clip-vit-base-patch32"  # 可选: openai/clip-vit-large-patch14
+  model_name: "openai/clip-vit-base-patch32"
+  cache_dir: "./models/clip_cache"
   use_pretrained: true
-  
-  # 联邦学习特殊配置
-  freeze_vision_encoder: false  # 是否冻结视觉编码器
-  freeze_text_encoder: false    # 是否冻结文本编码器
   
   # CLIP特有参数
   temperature: 0.07
+  freeze_vision_encoder: false
+  freeze_text_encoder: false
+  
+  # 图像编码器配置
+  image_encoder:
+    feature_dim: 768  # ViT-B/32的特征维度
+  
+  # 文本编码器配置
+  text_encoder:
+    feature_dim: 512
+    max_length: 77
 
+# 优化器设置 - 统一使用AdamW
 optimizer:
-  name: "adamw"
-  lr: 5e-5              # 降低学习率以适应预训练模型微调
-  weight_decay: 0.1     # 更强的权重衰减
-  betas: [0.9, 0.98]    # CLIP推荐的beta值
-  eps: 1e-6
+  learning_rate: 5e-5
+  weight_decay: 0.1
+  betas: [0.9, 0.98]
+  eps: 0.00000001
 
-# 训练配置
-training:
-  gradient_clip_norm: 1.0    # 梯度裁剪
-  warmup_steps: 1000         # 预热步数
-  
+# 数据设置
 data:
-  batch_size: 16             # 较小的批大小以节省内存
-  num_workers: 4
-  data_dir: "./data"
+  dataset: "clip"
+  data_dir: "/home/zzm/dataset/"
+  batch_size: 16
+  num_workers: 2
   
-  # 数据预处理（如果需要自定义）
+  # 数据分布
+  distribution: "iid"
+  
+  # 图像预处理参数
   image_size: 224
   normalize: true
-
-aggregation:
-  type: "fedavg"
-
-# 评估配置
-evaluation:
-  metrics: ["loss", "accuracy", "recall@5"]
-  eval_frequency: 5          # 每5轮评估一次
   
-# 日志配置  
-logging:
-  log_level: "INFO"
-  wandb:
-    enabled: false
-    project: "clip-federated-learning"
+  # 数据变换配置
+  transforms:
+    resize: 224
+    center_crop: 224
+    normalize:
+      mean: [0.48145466, 0.4578275, 0.40821073]
+      std: [0.26862954, 0.26130258, 0.27577711]
 
-# 模型保存配置
-checkpointing:
-  save_frequency: 10         # 每10轮保存一次
-  save_path: "./checkpoints/clip"
-  keep_last_n: 3            # 保留最近3个检查点
-
-communication:
-  type: "local"
-
+# 评估设置
 evaluation:
   evaluate_every: 5
-
-wandb:
-  enabled: true
-  project: "clip-federated-learning"
-  offline: false
-  tags: 
-    - "clip"
-    - "multimodal"
-    - "federated"
-
-device: "auto"  # 'auto', 'cpu', 'cuda', 'cuda:0'等
+  test_batch_size: 32
+  metrics: 
+    - "loss"
+    - "accuracy"
+    - "top5_accuracy"

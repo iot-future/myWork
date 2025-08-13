@@ -34,6 +34,24 @@ class DataTransforms:
             return torch.FloatTensor(data).view(batch_size, sequence_length, features_per_step)
         else:
             return torch.FloatTensor(data)
+    
+    @staticmethod
+    def for_clip_model(data: np.ndarray) -> np.ndarray:
+        """
+        CLIP模型的数据变换：准备图像数据用于CLIP处理
+        注意：这里返回numpy数组，实际的CLIP预处理在CLIPDataTransforms中完成
+        """
+        if len(data.shape) == 2 and data.shape[1] == 784:
+            # MNIST数据：从展平格式重塑为图像格式
+            data = data.reshape(-1, 28, 28)
+        
+        # 对于CLIP，我们返回numpy数组，让专门的CLIP处理器处理
+        return data
+    
+    @staticmethod
+    def normalize_data(data: np.ndarray, mean: float = 0.0, std: float = 1.0) -> np.ndarray:
+        """标准化数据"""
+        return (data - mean) / std
 
 
 class SimpleDataset(Dataset):

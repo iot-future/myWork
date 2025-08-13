@@ -89,8 +89,7 @@ python main.py --config configs/clip.yaml
 
 ### 优化器
 支持多种优化器类型：
-- SGD（默认）
-- Adam
+- AdamW优化器（统一使用）
 - AdamW（推荐用于 CLIP 模型）
 
 ### 聚合算法
@@ -134,13 +133,13 @@ model:
 ```
 
 ### 优化器配置
+项目统一使用AdamW优化器：
 ```yaml
 optimizer:
-  type: "adamw"          # 或 "sgd", "adam"
-  learning_rate: 1e-4
-  weight_decay: 0.01
-  betas: [0.9, 0.98]     # 适用于 Adam/AdamW
-  momentum: 0.9          # 适用于 SGD
+  learning_rate: 1e-3    # 学习率
+  weight_decay: 0.01     # 权重衰减
+  betas: [0.9, 0.999]    # AdamW参数
+  eps: 1e-8              # 数值稳定性参数
 ```
 
 ## 下一步

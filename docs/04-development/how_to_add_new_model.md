@@ -141,7 +141,12 @@ class YourCustomModel(BaseModel):
         self.create_optimizer(self.model.parameters())
         if self.optimizer is None:
             # 提供默认优化器作为后备
-            self.optimizer = optim.SGD(self.model.parameters(), lr=0.01)
+            # 使用默认AdamW优化器
+            from utils.optimizer_factory import OptimizerFactory
+            default_config = OptimizerFactory.get_default_config()
+            self.optimizer = OptimizerFactory.create_optimizer(
+                self.model.parameters(), default_config
+            )
         
         # 4. 定义损失函数
         self.criterion = nn.CrossEntropyLoss()
@@ -362,10 +367,10 @@ model:
   output_dim: 10
 
 optimizer:
-  type: "sgd"
-  learning_rate: 0.01
-  momentum: 0.9
-  weight_decay: 0.0001
+  learning_rate: 0.001
+  weight_decay: 0.01
+  betas: [0.9, 0.999]
+  eps: 1e-8
 
 data:
   batch_size: 32

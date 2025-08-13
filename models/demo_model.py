@@ -63,14 +63,14 @@ class DemoModel(BaseModel):
         # 3. 构建模型架构
         self.model = self._build_network()
         
-        # 4. 创建优化器（必须调用）
+        # 4. 创建AdamW优化器（必须调用）
         self.create_optimizer(self.model.parameters())
         if self.optimizer is None:
-            # 提供默认优化器作为后备（推荐）
-            self.optimizer = torch.optim.Adam(
-                self.model.parameters(), 
-                lr=0.001, 
-                weight_decay=1e-4
+            # 使用默认AdamW配置作为后备
+            from utils.optimizer_factory import OptimizerFactory
+            default_config = OptimizerFactory.get_default_config()
+            self.optimizer = OptimizerFactory.create_optimizer(
+                self.model.parameters(), default_config
             )
         
         # 5. 定义损失函数

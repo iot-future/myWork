@@ -24,11 +24,15 @@ class SimpleLinearModel(BaseModel):
         # 创建简单的线性模型
         self.model = nn.Linear(input_dim, output_dim)
         
-        # 使用配置化优化器或默认SGD
+        # 创建AdamW优化器
         self.create_optimizer(self.model.parameters())
         if self.optimizer is None:
-            # 回退到默认SGD（保持向后兼容）
-            self.optimizer = optim.SGD(self.model.parameters(), lr=0.01)
+            # 回退到默认AdamW（保持向后兼容）
+            from utils.optimizer_factory import OptimizerFactory
+            default_config = OptimizerFactory.get_default_config()
+            self.optimizer = OptimizerFactory.create_optimizer(
+                self.model.parameters(), default_config
+            )
         
         self.criterion = nn.MSELoss()
     
@@ -99,7 +103,12 @@ class SimpleClassificationModel(BaseModel):
             nn.ReLU(),
             nn.Linear(64, num_classes)
         )
-        self.optimizer = optim.SGD(self.model.parameters(), lr=learning_rate)
+        # 使用默认AdamW优化器
+        from utils.optimizer_factory import OptimizerFactory
+        default_config = OptimizerFactory.get_default_config()
+        self.optimizer = OptimizerFactory.create_optimizer(
+            self.model.parameters(), default_config
+        )
         self.criterion = nn.CrossEntropyLoss()
     
     def get_parameters(self) -> Dict[str, Any]:

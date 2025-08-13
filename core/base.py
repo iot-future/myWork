@@ -75,7 +75,7 @@ class BaseModel(ABC):
         
     def create_optimizer(self, model_parameters):
         """
-        创建优化器 - 可被子类重写以支持自定义优化器
+        创建AdamW优化器
         
         Args:
             model_parameters: 模型参数
@@ -84,6 +84,13 @@ class BaseModel(ABC):
             from utils.optimizer_factory import OptimizerFactory
             self.optimizer = OptimizerFactory.create_optimizer(
                 model_parameters, self.optimizer_config
+            )
+        else:
+            # 使用默认AdamW配置
+            from utils.optimizer_factory import OptimizerFactory
+            default_config = OptimizerFactory.get_default_config()
+            self.optimizer = OptimizerFactory.create_optimizer(
+                model_parameters, default_config
             )
     
     @abstractmethod

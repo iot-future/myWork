@@ -50,11 +50,15 @@ class CNNModel(BaseModel):
             nn.Linear(512, 10)
         )
         
-        # 使用配置化优化器或默认SGD
+        # 创建AdamW优化器
         self.create_optimizer(self.model.parameters())
         if self.optimizer is None:
-            # 回退到默认SGD（保持向后兼容）
-            self.optimizer = optim.SGD(self.model.parameters(), lr=0.01)
+            # 回退到默认AdamW（保持向后兼容）
+            from utils.optimizer_factory import OptimizerFactory
+            default_config = OptimizerFactory.get_default_config()
+            self.optimizer = OptimizerFactory.create_optimizer(
+                self.model.parameters(), default_config
+            )
         
         self.criterion = nn.CrossEntropyLoss()
         

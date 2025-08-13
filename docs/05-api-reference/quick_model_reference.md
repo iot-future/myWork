@@ -65,9 +65,12 @@ model:
   type: "your_model"
   # 添加模型参数
 
+# 统一使用AdamW优化器
 optimizer:
-  type: "adam"
   learning_rate: 0.001
+  weight_decay: 0.01
+  betas: [0.9, 0.999]
+  eps: 1e-8
 ```
 
 ### 5. 测试验证
@@ -127,7 +130,12 @@ class TemplateModel(BaseModel):
         # 创建优化器
         self.create_optimizer(self.model.parameters())
         if self.optimizer is None:
-            self.optimizer = torch.optim.Adam(self.model.parameters())
+            # 使用默认AdamW优化器
+            from utils.optimizer_factory import OptimizerFactory
+            default_config = OptimizerFactory.get_default_config()
+            self.optimizer = OptimizerFactory.create_optimizer(
+                self.model.parameters(), default_config
+            )
         
         self.criterion = nn.CrossEntropyLoss()
     

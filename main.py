@@ -28,19 +28,7 @@ def main():
     print("=" * 60)
     print(f"实验名称: {config['experiment']['name']}")
     print(f"训练轮次: {config['experiment']['rounds']} | 客户端数量: {config['client']['num_clients']} | 本地训练轮次: {config['client']['local_epochs']}")
-    
-    # 显示优化器配置信息
-    optimizer_config = config.get('optimizer', {})
-    if optimizer_config:
-        optimizer_info = f"优化器: {optimizer_config.get('type', 'sgd').upper()} | 学习率: {optimizer_config.get('learning_rate', 0.01)}"
-        if optimizer_config.get('momentum'):
-            optimizer_info += f" | 动量: {optimizer_config['momentum']}"
-        if optimizer_config.get('weight_decay'):
-            optimizer_info += f" | 权重衰减: {optimizer_config['weight_decay']}"
-        print(optimizer_info)
-    else:
-        print(f"优化器: SGD (默认) | 学习率: {config['client'].get('learning_rate', 0.01)}")
-    
+    print(f"优化器: AdamW (统一使用)")
     data_info = f"批大小: {config['data']['batch_size']}"
     if config.get('wandb', {}).get('enabled', False):
         data_info += f" | WandB项目: {config['wandb']['project']}"
