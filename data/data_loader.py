@@ -21,37 +21,38 @@ SUPPORTED_DATASETS = {
 }
 
 
-def _split_dataset(dataset: Dataset, num_clients: int, client_id: int = None, seed: int = 42) -> List[List[int]]:
+def _split_dataset(dataset: Dataset, total_clients: int, client_dataset_id: int = None, seed: int = 42) -> List[List[int]]:
     """将数据集索引均匀（IID）地分配给客户端。
     
     Args:
         dataset: 要分割的数据集
-        num_clients: 客户端总数
-        client_id: 如果指定，只返回该客户端的索引
+        total_clients: 使用此数据集的客户端总数
+        client_dataset_id: 客户端在此数据集中的ID (0 到 total_clients-1)，
+                          如果指定，只返回该客户端的索引
         seed: 随机种子，用于确保可复现性
     """
     num_items = len(dataset)
-    items_per_client = num_items // num_clients
+    items_per_client = num_items // total_clients
     
     # 为确保可复现性，在打乱前固定随机种子
     g = torch.Generator()
     g.manual_seed(seed)
     shuffled_indices = torch.randperm(num_items, generator=g).tolist()
 
-    if client_id is not None:
+    if client_dataset_id is not None:
         # 只返回指定客户端的索引
-        start_idx = client_id * items_per_client
-        if client_id == num_clients - 1:
+        start_idx = client_dataset_id * items_per_client
+        if client_dataset_id == total_clients - 1:
             end_idx = num_items
         else:
             end_idx = start_idx + items_per_client
         return shuffled_indices[start_idx:end_idx]
     else:
         # 返回所有客户端的索引
-        client_indices: List[List[int]] = [[] for _ in range(num_clients)]
-        for client_id in range(num_clients):
+        client_indices: List[List[int]] = [[] for _ in range(total_clients)]
+        for client_id in range(total_clients):
             start_idx = client_id * items_per_client
-            if client_id == num_clients - 1:
+            if client_id == total_clients - 1:
                 end_idx = num_items
             else:
                 end_idx = start_idx + items_per_client
@@ -60,8 +61,9 @@ def _split_dataset(dataset: Dataset, num_clients: int, client_id: int = None, se
 
 
 def get_client_dataloaders(
-    client_id: int,
-    num_clients: int,
+    client_original_id: str,
+    dataset_client_mappings: Dict[str, Dict[str, int]],
+    dataset_client_counts: Dict[str, int],
     batch_size: int,
     dataset_configs: Dict[str, Dict],
     num_workers: int = 0,
@@ -73,8 +75,11 @@ def get_client_dataloaders(
     每个客户端都会收到每个请求数据集的非重叠子集。
 
     Args:
-        client_id (int): 客户端 ID (从 0 到 num_clients-1)。
-        num_clients (int): 客户端总数。
+        client_original_id (str): 客户端的原始ID（如 "client_0"）
+        dataset_client_mappings (Dict[str, Dict[str, int]]): 数据集客户端映射字典
+            {数据集名称: {客户端原始ID: 数据集内ID}}
+        dataset_client_counts (Dict[str, int]): 每个数据集的客户端总数
+            {数据集名称: 客户端数量}
         batch_size (int): DataLoader 的批处理大小。
         dataset_configs (Dict[str, Dict]): 一个字典，键是数据集名称，
             值是该数据集构造函数的参数字典。
@@ -85,8 +90,6 @@ def get_client_dataloaders(
     Returns:
         Dict[str, DataLoader]: 一个将数据集名称映射到相应 DataLoader 的字典。
     """
-    if not 0 <= client_id < num_clients:
-        raise ValueError(f"客户端 ID 必须在 0 到 {num_clients-1} 之间")
 
     client_dataloaders = {}
 
@@ -97,7 +100,10 @@ def get_client_dataloaders(
             raise NotImplementedError(
                 f"不支持数据集 '{name}'。支持的数据集: {supported_names}"
             )
-
+        
+            
+        dataset_internal_client_id = dataset_client_mappings[name_lower][client_original_id]
+        
         # 1. 准备数据集配置，确保不传递DataLoader特定的参数给数据集
         dataset_config = config.copy()
 
@@ -105,8 +111,13 @@ def get_client_dataloaders(
         dataset_class = SUPPORTED_DATASETS[name_lower]
         full_dataset = dataset_class(**dataset_config)
 
-        # 3. 为所有客户端拆分数据
-        client_indices = _split_dataset(full_dataset, num_clients, client_id, seed)
+        # 3. 为所有客户端拆分数据，获取此客户端的数据索引
+        client_indices = _split_dataset(
+            full_dataset, 
+            dataset_client_counts[name_lower], 
+            dataset_internal_client_id, 
+            seed
+        )
 
         # 4. 为此客户端创建子集
         client_dataset = Subset(full_dataset, client_indices)

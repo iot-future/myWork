@@ -18,7 +18,7 @@ from aggregation.federated_avg import FederatedAveraging
 from utils.model_factory import ModelFactory
 from utils.results_handler import ResultsHandler
 from utils.wandb_logger import init_wandb, log_client_metrics, log_global_metrics, finish_wandb
-
+from utils.dataset_stats import count_clients_per_dataset
 
 class ExperimentRunner:
     """实验运行器"""
@@ -30,7 +30,8 @@ class ExperimentRunner:
         self.test_loader = None
         self.use_wandb = config.get('wandb', {}).get('enabled', False)
         self.device = None
-        
+        self.dataset_client_counts, self.dataset_client_mappings = count_clients_per_dataset(config)
+
     def setup_environment(self):
         """设置实验环境"""
         # 设置设备
@@ -99,8 +100,9 @@ class ExperimentRunner:
             
             # 获取此客户端的数据加载器
             client_dataloaders_dict = get_client_dataloaders(
-                client_id=client_id,
-                num_clients=num_clients,
+                client_original_id=client_key,
+                dataset_client_mappings=self.dataset_client_mappings,
+                dataset_client_counts=self.dataset_client_counts,
                 batch_size=batch_size,
                 dataset_configs=client_dataset_configs,
                 seed=self.config['experiment']['seed']
