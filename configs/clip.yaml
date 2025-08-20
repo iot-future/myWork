@@ -20,7 +20,19 @@ client:
   num_clients: 5
   local_epochs: 2
   learning_rate: 0.00005
-  samples_per_client: null  # null表示使用默认均匀分布
+  
+  # 客户端数据集配置 - 所有客户端使用CLIP数据集
+  client_datasets:
+    client_0:
+      - clip
+    client_1:
+      - clip
+    client_2:
+      - clip
+    client_3:
+      - clip
+    client_4:
+      - clip
 
 # 服务器设置
 server:
@@ -60,25 +72,23 @@ optimizer:
 
 # 数据设置
 data:
-  dataset: "clip"
   data_dir: "/home/zzm/dataset/"
   batch_size: 16
   num_workers: 2
   
-  # 数据分布
-  distribution: "iid"
-  
-  # 图像预处理参数
-  image_size: 224
-  normalize: true
-  
-  # 数据变换配置
-  transforms:
-    resize: 224
-    center_crop: 224
-    normalize:
-      mean: [0.48145466, 0.4578275, 0.40821073]
-      std: [0.26862954, 0.26130258, 0.27577711]
+  # 数据集配置
+  datasets:
+    clip:
+      train: true
+      image_size: 224
+      normalize: true
+      # 数据变换配置
+      transforms:
+        resize: 224
+        center_crop: 224
+        normalize:
+          mean: [0.48145466, 0.4578275, 0.40821073]
+          std: [0.26862954, 0.26130258, 0.27577711]
 
 # 评估设置
 evaluation:

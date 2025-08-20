@@ -18,9 +18,31 @@ wandb:
 # 客户端设置
 client:
   num_clients: 10      
-  samples_per_client: 6000  # 样本
   local_epochs: 2       # 本地训练轮数
   learning_rate: 0.001   # AdamW学习率
+  
+  # 客户端数据集配置 - 所有客户端使用MNIST
+  client_datasets:
+    client_0:
+      - mnist
+    client_1:
+      - mnist
+    client_2:
+      - mnist
+    client_3:
+      - mnist
+    client_4:
+      - mnist
+    client_5:
+      - mnist
+    client_6:
+      - mnist
+    client_7:
+      - mnist
+    client_8:
+      - mnist
+    client_9:
+      - mnist
   
 # 服务器设置  
 server:
@@ -39,14 +61,16 @@ optimizer:
   betas: [0.9, 0.999]
   eps: 0.00000001
 
-# 数据设置 - IID分布（数据打乱后均匀分配）
+# 数据设置
 data:
-  dataset: "mnist"
   data_dir: "/home/zzm/dataset/"
   batch_size: 10     # 论文中使用较小的批次大小
-  distribution: "iid"  # IID数据分布
-  total_samples: 60000  # MNIST训练集总样本数
+  
+  # 数据集配置
+  datasets:
+    mnist:
+      train: true
 
 # 评估设置
 evaluation:
-  evaluate_every: 1  # 每10轮评估一次
+  evaluate_every: 1  # 每1轮评估一次

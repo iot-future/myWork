@@ -1,33 +1,30 @@
-# 默认实验配置文件
+# 简单MNIST联邦学习实验配置
+# 所有客户端都使用MNIST数据集
 
 # 实验基本设置
 experiment:
-  name: "federated_learning_experiment"
-  rounds: 10
+  name: "simple_mnist_experiment"
+  rounds: 5
   seed: 42
 
 # WandB 配置
 wandb:
-  enabled: false  # 是否启用WandB
+  enabled: false
   project: "federated-learning"
 
 # 客户端设置
 client:
-  num_clients: 5
-  local_epochs: 5
-  learning_rate: 0.001  # AdamW默认学习率
+  num_clients: 3
+  local_epochs: 3
+  learning_rate: 0.001
   
-  # 客户端数据集配置 - 所有客户端使用MNIST
+  # 客户端数据集配置
   client_datasets:
     client_0:
       - mnist
     client_1:
       - mnist
     client_2:
-      - mnist
-    client_3:
-      - mnist
-    client_4:
       - mnist
   
 # 服务器设置  
@@ -36,12 +33,12 @@ server:
 
 # 模型设置
 model:
-  type: "cnn"  # 可选: "cnn", "linear"
-  learning_rate: 0.001  # AdamW默认学习率
+  type: "cnn"
+  learning_rate: 0.01
 
-# 优化器设置 - 统一使用AdamW
+# 优化器设置
 optimizer:
-  learning_rate: 0.001
+  learning_rate: 0.01
   weight_decay: 0.01
   betas: [0.9, 0.999]
   eps: 1e-8
@@ -49,7 +46,7 @@ optimizer:
 # 数据设置
 data:
   data_dir: "/home/zzm/dataset/"
-  batch_size: 32
+  batch_size: 64
   
   # 数据集配置
   datasets:
@@ -58,5 +55,5 @@ data:
 
 # 评估设置
 evaluation:
-  evaluate_every: 1  # 每隔多少轮评估一次
+  evaluate_every: 1
   test_batch_size: 100

@@ -1,8 +1,8 @@
-# 默认实验配置文件
+# 多数据集客户端实验配置文件
 
 # 实验基本设置
 experiment:
-  name: "federated_learning_experiment"
+  name: "multi_dataset_federated_experiment"
   rounds: 10
   seed: 42
 
@@ -13,22 +13,21 @@ wandb:
 
 # 客户端设置
 client:
-  num_clients: 5
+  num_clients: 4  # 总客户端数量
   local_epochs: 5
   learning_rate: 0.001  # AdamW默认学习率
   
-  # 客户端数据集配置 - 所有客户端使用MNIST
+  # 客户端数据集配置
   client_datasets:
     client_0:
       - mnist
     client_1:
       - mnist
     client_2:
-      - mnist
+      - cifar10
     client_3:
       - mnist
-    client_4:
-      - mnist
+      - cifar10
   
 # 服务器设置  
 server:
@@ -54,6 +53,8 @@ data:
   # 数据集配置
   datasets:
     mnist:
+      train: true
+    cifar10:
       train: true
 
 # 评估设置

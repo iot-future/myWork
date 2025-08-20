@@ -1,272 +1,159 @@
-import numpy as np
+"""
+data 模块的核心接口。
+
+该文件提供了为联邦学习客户端创建数据加载器的主要功能。
+它抽象了数据分区、子集创建和 DataLoader 实例化的复杂性。
+
+设计原则：
+- 数据集类只负责数据的加载和预处理变换
+- DataLoader 的创建统一在此模块中进行，确保联邦学习的数据分区需求
+- 支持灵活的批处理大小和工作进程配置
+"""
+from typing import Dict, List
 import torch
-from torch.utils.data import Dataset, DataLoader
-from torchvision import datasets, transforms
-from typing import List, Tuple, Callable, Optional
-import os
+from torch.utils.data import DataLoader, Dataset, Subset
+from data.datasets import mnist, cifar10
+
+# 支持的数据集名称到其对应类的映射
+SUPPORTED_DATASETS = {
+    'mnist': mnist.MNIST,
+    'cifar10': cifar10.CIFAR10
+}
 
 
-# 数据变换函数
-class DataTransforms:
-    """数据变换工具类"""
+def _split_dataset(dataset: Dataset, num_clients: int, client_id: int = None, seed: int = 42) -> List[List[int]]:
+    """将数据集索引均匀（IID）地分配给客户端。
     
-    @staticmethod
-    def for_linear_model(data: np.ndarray) -> torch.Tensor:
-        """线性模型的数据变换：保持数据展平状态"""
-        return torch.FloatTensor(data)
+    Args:
+        dataset: 要分割的数据集
+        num_clients: 客户端总数
+        client_id: 如果指定，只返回该客户端的索引
+        seed: 随机种子，用于确保可复现性
+    """
+    num_items = len(dataset)
+    items_per_client = num_items // num_clients
     
-    @staticmethod
-    def for_cnn_model(data: np.ndarray, channels: int = 1, height: int = 28, width: int = 28) -> torch.Tensor:
-        """CNN模型的数据变换：将展平数据重新整形为图像格式"""
-        if len(data.shape) == 2:
-            # 假设数据已经展平，重新整形为图像格式
-            return torch.FloatTensor(data).view(-1, channels, height, width)
+    # 为确保可复现性，在打乱前固定随机种子
+    g = torch.Generator()
+    g.manual_seed(seed)
+    shuffled_indices = torch.randperm(num_items, generator=g).tolist()
+
+    if client_id is not None:
+        # 只返回指定客户端的索引
+        start_idx = client_id * items_per_client
+        if client_id == num_clients - 1:
+            end_idx = num_items
         else:
-            return torch.FloatTensor(data)
-    
-    @staticmethod
-    def for_rnn_model(data: np.ndarray, sequence_length: int) -> torch.Tensor:
-        """RNN模型的数据变换：将数据整形为序列格式"""
-        if len(data.shape) == 2:
-            batch_size, features = data.shape
-            # 重新整形为序列格式 (batch_size, sequence_length, features_per_step)
-            features_per_step = features // sequence_length
-            return torch.FloatTensor(data).view(batch_size, sequence_length, features_per_step)
-        else:
-            return torch.FloatTensor(data)
-    
-    @staticmethod
-    def for_clip_model(data: np.ndarray) -> np.ndarray:
-        """
-        CLIP模型的数据变换：准备图像数据用于CLIP处理
-        注意：这里返回numpy数组，实际的CLIP预处理在CLIPDataTransforms中完成
-        """
-        if len(data.shape) == 2 and data.shape[1] == 784:
-            # MNIST数据：从展平格式重塑为图像格式
-            data = data.reshape(-1, 28, 28)
-        
-        # 对于CLIP，我们返回numpy数组，让专门的CLIP处理器处理
-        return data
-    
-    @staticmethod
-    def normalize_data(data: np.ndarray, mean: float = 0.0, std: float = 1.0) -> np.ndarray:
-        """标准化数据"""
-        return (data - mean) / std
-
-
-class SimpleDataset(Dataset):
-    """简单数据集类"""
-    
-    def __init__(self, data: np.ndarray, labels: np.ndarray, data_type: str = "classification", transform=None):
-        """
-        初始化数据集
-        
-        Args:
-            data: 输入数据
-            labels: 标签数据
-            data_type: 数据类型 ("classification" 或 "regression")
-            transform: 数据变换函数，用于将数据转换为模型期望的格式
-        """
-        # 应用数据变换
-        if transform is not None:
-            self.data = transform(data)
-        else:
-            self.data = torch.FloatTensor(data)
-        
-        # 分类任务使用LongTensor，回归任务使用FloatTensor
-        if data_type == "classification":
-            self.labels = torch.LongTensor(labels)
-        else:
-            self.labels = torch.FloatTensor(labels)
-    
-    def __len__(self):
-        return len(self.data)
-    
-    def __getitem__(self, idx):
-        return self.data[idx], self.labels[idx]
-
-
-class FederatedDataLoader:
-    """联邦学习数据加载器"""
-    
-    def __init__(self, num_clients: int, batch_size: int = 32, data_transform: Optional[Callable] = None, data_root: str = "./data"):
-        """
-        初始化联邦数据加载器
-        
-        Args:
-            num_clients: 客户端数量
-            batch_size: 批次大小
-            data_transform: 数据变换函数，用于将数据转换为模型期望的格式
-            data_root: 数据存储根目录
-        """
-        self.num_clients = num_clients
-        self.batch_size = batch_size
-        self.data_transform = data_transform or DataTransforms.for_linear_model
-        self.data_root = data_root
-        self.client_data = {}
-    
-    def load_mnist_dataset(self,
-                          random_state: int = 42,
-                          samples_per_client: Optional[int] = None,
-                          data_root: Optional[str] = None) -> Tuple[List[DataLoader], DataLoader]:
-        """
-        加载MNIST数据集（支持IID数据分布）
-        
-        Args:
-            random_state: 随机种子
-            samples_per_client: 每个客户端的样本数量（用于基线实验）
-            data_root: 数据根目录，如果为None则使用实例的data_root
-            
-        Returns:
-            (客户端数据加载器列表, 测试数据加载器)
-        """
-        # 使用传入的data_root参数或实例的data_root
-        dataset_root = data_root if data_root is not None else self.data_root
-        
-        transform = transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize((0.5,), (0.5,))
-        ])
-        
-        train_dataset = datasets.MNIST(dataset_root, train=True, download=True, transform=transform)
-        test_dataset = datasets.MNIST(dataset_root, train=False, download=True, transform=transform)
-        
-        # 提取训练数据
-        X_train, y_train = self._extract_from_dataset(train_dataset)
-        
-        # 创建联邦数据分布
-        if samples_per_client is not None:
-            # 基线实验：每个客户端固定样本数
-            client_dataloaders = self._create_baseline_federated_split(
-                X_train, y_train, random_state, samples_per_client)
-        else:
-            # 标准IID分布：平均分配所有数据
-            client_dataloaders = self._create_federated_split(X_train, y_train, random_state)
-        
-        # 创建测试数据加载器
-        test_dataloader = DataLoader(test_dataset, batch_size=self.batch_size, shuffle=False)
-        
-        return client_dataloaders, test_dataloader
-    
-    def _extract_from_dataset(self, dataset) -> Tuple[np.ndarray, np.ndarray]:
-        """从PyTorch数据集中提取特征和标签"""
-        X_list = []
-        y_list = []
-        
-        for data, label in dataset:
-            if isinstance(data, torch.Tensor):
-                # 将图像数据展平
-                X_list.append(data.numpy().flatten())
+            end_idx = start_idx + items_per_client
+        return shuffled_indices[start_idx:end_idx]
+    else:
+        # 返回所有客户端的索引
+        client_indices: List[List[int]] = [[] for _ in range(num_clients)]
+        for client_id in range(num_clients):
+            start_idx = client_id * items_per_client
+            if client_id == num_clients - 1:
+                end_idx = num_items
             else:
-                X_list.append(data)
-            y_list.append(label)
-        
-        return np.array(X_list), np.array(y_list)
-    
-    def _create_baseline_federated_split(self, 
-                                        X: np.ndarray, 
-                                        y: np.ndarray, 
-                                        random_state: int,
-                                        samples_per_client: int) -> List[DataLoader]:
-        """
-        创建基线联邦数据分布（按照开山论文设置）
-        每个客户端固定样本数的IID分布
-        
-        Args:
-            X: 训练数据
-            y: 训练标签  
-            random_state: 随机种子
-            samples_per_client: 每个客户端的样本数量
-        """
-        client_dataloaders = []
-        total_samples = len(X)
-        total_needed = self.num_clients * samples_per_client
-        
-        # 确保有足够的数据
-        if total_needed > total_samples:
-            print(f"警告: 需要 {total_needed} 个样本，但只有 {total_samples} 个样本")
-            print(f"将使用所有可用数据，每个客户端约 {total_samples // self.num_clients} 个样本")
-            return self._create_federated_split(X, y, random_state)
-        
-        # 随机打乱数据（IID设置）
-        indices = np.random.RandomState(random_state).permutation(total_samples)
-        
-        # 为每个客户端分配固定数量的样本
-        for i in range(self.num_clients):
-            start_idx = i * samples_per_client
-            end_idx = start_idx + samples_per_client
-            client_indices = indices[start_idx:end_idx]
-            
-            client_X = X[client_indices]
-            client_y = y[client_indices]
-            
-            # 创建数据集和数据加载器
-            dataset = SimpleDataset(client_X, client_y, "classification", self.data_transform)
-            dataloader = DataLoader(dataset, batch_size=self.batch_size, shuffle=True)
-            client_dataloaders.append(dataloader)
-            
-            # 存储客户端数据信息
-            self.client_data[f"client_{i}"] = {
-                "size": samples_per_client,
-                "indices": client_indices.tolist()
-            }
-        
-        print(f"成功创建基线联邦数据分布:")
-        print(f"- 客户端数量: {self.num_clients}")
-        print(f"- 每客户端样本数: {samples_per_client}")
-        print(f"- 总使用样本数: {self.num_clients * samples_per_client}")
-        print(f"- 数据分布: IID (随机打乱后分配)")
-        
-        return client_dataloaders
+                end_idx = start_idx + items_per_client
+            client_indices[client_id] = shuffled_indices[start_idx:end_idx]
+        return client_indices
 
-    def _create_federated_split(self, 
-                               X: np.ndarray, 
-                               y: np.ndarray, 
-                               random_state: int) -> List[DataLoader]:
-        """创建联邦数据分布（仅IID分布）"""
-        client_dataloaders = []
-        
-        # IID分布：随机分配数据
-        indices = np.random.RandomState(random_state).permutation(len(X))
-        split_indices = np.array_split(indices, self.num_clients)
-        
-        # 为每个客户端创建数据加载器
-        for i, client_indices in enumerate(split_indices):
-            client_X = X[client_indices]
-            client_y = y[client_indices]
-            
-            # 创建数据集和数据加载器
-            dataset = SimpleDataset(client_X, client_y, "classification", self.data_transform)
-            dataloader = DataLoader(dataset, batch_size=self.batch_size, shuffle=True)
-            client_dataloaders.append(dataloader)
-            
-            # 存储客户端数据信息
-            self.client_data[f"client_{i}"] = {
-                "size": len(client_indices),
-                "indices": client_indices.tolist()
-            }
-        
-        return client_dataloaders
+
+def get_client_dataloaders(
+    client_id: int,
+    num_clients: int,
+    batch_size: int,
+    dataset_configs: Dict[str, Dict],
+    num_workers: int = 0,
+    seed: int = 42
+) -> Dict[str, DataLoader]:
+    """
+    为特定客户端创建并返回一个或多个 DataLoader。
+
+    每个客户端都会收到每个请求数据集的非重叠子集。
+
+    Args:
+        client_id (int): 客户端 ID (从 0 到 num_clients-1)。
+        num_clients (int): 客户端总数。
+        batch_size (int): DataLoader 的批处理大小。
+        dataset_configs (Dict[str, Dict]): 一个字典，键是数据集名称，
+            值是该数据集构造函数的参数字典。
+            示例: {'mnist': {'data_root': './data/MNIST', 'train': True}}
+        num_workers (int): 数据加载时使用的工作进程数，默认为0。
+        seed (int): 随机种子，用于数据集分割的可复现性，默认为42。
+
+    Returns:
+        Dict[str, DataLoader]: 一个将数据集名称映射到相应 DataLoader 的字典。
+    """
+    if not 0 <= client_id < num_clients:
+        raise ValueError(f"客户端 ID 必须在 0 到 {num_clients-1} 之间")
+
+    client_dataloaders = {}
+
+    for name, config in dataset_configs.items():
+        name_lower = name.lower()
+        if name_lower not in SUPPORTED_DATASETS:
+            supported_names = list(SUPPORTED_DATASETS.keys())
+            raise NotImplementedError(
+                f"不支持数据集 '{name}'。支持的数据集: {supported_names}"
+            )
+
+        # 1. 准备数据集配置，确保不传递DataLoader特定的参数给数据集
+        dataset_config = config.copy()
+
+        # 2. 加载完整数据集
+        dataset_class = SUPPORTED_DATASETS[name_lower]
+        full_dataset = dataset_class(**dataset_config)
+
+        # 3. 为所有客户端拆分数据
+        client_indices = _split_dataset(full_dataset, num_clients, client_id, seed)
+
+        # 4. 为此客户端创建子集
+        client_dataset = Subset(full_dataset, client_indices)
+
+        # 5. 创建 DataLoader，使用统一的参数
+        dataloader = DataLoader(
+            client_dataset,
+            batch_size=batch_size,
+            shuffle=True,
+            num_workers=num_workers
+        )
+        client_dataloaders[name] = dataloader
+
+    return client_dataloaders
+
+
+def get_dataset_info(dataset_name: str, dataset_config: Dict) -> Dict[str, any]:
+    """
+    获取数据集的基本信息，如类别名称、数据集大小等。
+
+    Args:
+        dataset_name (str): 数据集名称。
+        dataset_config (Dict): 数据集配置参数。
+
+    Returns:
+        Dict[str, any]: 包含数据集信息的字典，包括：
+            - classnames: 类别名称列表
+            - num_classes: 类别数量
+            - dataset_size: 数据集大小
+    """
+    dataset_name_lower = dataset_name.lower()
+    if dataset_name_lower not in SUPPORTED_DATASETS:
+        supported_names = list(SUPPORTED_DATASETS.keys())
+        raise NotImplementedError(
+            f"不支持数据集 '{dataset_name}'。支持的数据集: {supported_names}"
+        )
+
+    # 创建数据集实例来获取信息
+    dataset_config = dataset_config.copy()
+    dataset_config.pop('batch_size', None)
+    dataset_config.pop('num_workers', None)
     
-    def get_client_data_info(self) -> dict:
-        """获取客户端数据信息"""
-        return self.client_data
-    
-    def get_data_statistics(self, client_dataloaders: List[DataLoader]) -> dict:
-        """获取数据统计信息"""
-        stats = {
-            "total_clients": len(client_dataloaders),
-            "client_sizes": [],
-            "total_samples": 0
-        }
-        
-        for i, dataloader in enumerate(client_dataloaders):
-            client_size = len(dataloader.dataset)
-            stats["client_sizes"].append(client_size)
-            stats["total_samples"] += client_size
-        
-        stats["avg_client_size"] = stats["total_samples"] / stats["total_clients"]
-        stats["min_client_size"] = min(stats["client_sizes"])
-        stats["max_client_size"] = max(stats["client_sizes"])
-        
-        return stats
+    dataset_class = SUPPORTED_DATASETS[dataset_name_lower]
+    dataset = dataset_class(**dataset_config)
+
+    return {
+        'classnames': dataset.classnames,
+        'num_classes': len(dataset.classnames),
+        'dataset_size': len(dataset)
+    }

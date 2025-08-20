@@ -8,10 +8,12 @@ import random
 import numpy as np
 import torch
 from typing import Dict, Any, List
+from torch.utils.data import DataLoader, ConcatDataset
 
 from core.server import FederatedServer
 from core.client import FederatedClient
-from data.data_loader import FederatedDataLoader
+from data.data_loader import get_client_dataloaders
+from data.datasets.mnist import MNIST
 from aggregation.federated_avg import FederatedAveraging
 from utils.model_factory import ModelFactory
 from utils.results_handler import ResultsHandler
@@ -65,30 +67,82 @@ class ExperimentRunner:
         data_config = self.config['data']
         client_config = self.config['client']
         
-        # 创建数据加载器
-        data_loader = FederatedDataLoader(
-            num_clients=client_config['num_clients'],
-            batch_size=data_config['batch_size'],
-            data_root=data_config.get('data_dir', './data')
+        # 获取配置参数
+        num_clients = client_config['num_clients']
+        batch_size = data_config['batch_size']
+        data_root = data_config.get('data_dir', './data')
+        
+        # 准备基础数据集配置
+        base_dataset_configs = {}
+        for dataset_name, dataset_config in data_config['datasets'].items():
+            base_dataset_configs[dataset_name] = {
+                'data_root': data_root,
+                **dataset_config
+            }
+        
+        # 为每个客户端创建数据加载器
+        client_data_loaders = []
+        client_datasets_config = client_config['client_datasets']
+        
+        for client_id in range(num_clients):
+            client_key = f"client_{client_id}"
+            
+            # 获取此客户端应该使用的数据集
+            client_dataset_names = client_datasets_config[client_key]
+            
+            # 为此客户端准备数据集配置
+            client_dataset_configs = {
+                name: base_dataset_configs[name] 
+                for name in client_dataset_names 
+                if name in base_dataset_configs
+            }
+            
+            # 获取此客户端的数据加载器
+            client_dataloaders_dict = get_client_dataloaders(
+                client_id=client_id,
+                num_clients=num_clients,
+                batch_size=batch_size,
+                dataset_configs=client_dataset_configs,
+                seed=self.config['experiment']['seed']
+            )
+            
+            # 将数据加载器字典存储起来
+            client_data_loaders.append(client_dataloaders_dict)
+        
+        # 创建测试数据加载器（使用第一个数据集作为测试集）
+        first_dataset_name = list(base_dataset_configs.keys())[0]
+        test_config = base_dataset_configs[first_dataset_name].copy()
+        test_config['train'] = False
+        
+        from data.data_loader import SUPPORTED_DATASETS
+        test_dataset = SUPPORTED_DATASETS[first_dataset_name](**test_config)
+        
+        self.test_loader = DataLoader(
+            test_dataset, 
+            batch_size=batch_size, 
+            shuffle=False
         )
         
-        # 客户端样本数（可选参数，用于基线实验）
-        samples_per_client = client_config.get('samples_per_client', None)
-        
-        # 获取客户端数据和测试数据
-        client_data_loaders, self.test_loader = data_loader.load_mnist_dataset(
-            samples_per_client=samples_per_client
-        )
-        
-        # 打印数据统计信息
-        stats = data_loader.get_data_statistics(client_data_loaders)
-        print(f"✓ 数据加载完成: {stats['total_clients']} 个客户端，共 {stats['total_samples']} 样本")
-        if samples_per_client is not None:
-            print(f"  模式: 每客户端固定 {samples_per_client} 样本")
-        else:
-            print(f"  模式: 均匀分布 (平均每客户端 {stats['avg_client_size']:.0f} 样本)")
+        # 计算并打印数据统计信息
+        self._print_data_statistics(client_data_loaders, num_clients)
         
         return client_data_loaders
+    
+    def _print_data_statistics(self, client_data_loaders, num_clients):
+        """打印数据统计信息"""
+        print(f"✓ 数据加载完成: {num_clients} 个客户端")
+        
+        for client_id, dataloaders_dict in enumerate(client_data_loaders):
+            dataset_info = []
+            total_client_samples = 0
+            
+            for dataset_name, dataloader in dataloaders_dict.items():
+                samples = len(dataloader.dataset)
+                total_client_samples += samples
+                dataset_info.append(f"{dataset_name}({samples})")
+            
+            datasets_str = ", ".join(dataset_info)
+            print(f"  客户端 {client_id}: {datasets_str} - 总计 {total_client_samples} 样本")
     
     def setup_server(self):
         """设置服务器"""
@@ -116,7 +170,7 @@ class ExperimentRunner:
         optimizer_config = self.config.get('optimizer', {})
         
         self.clients = []
-        for i, data_loader in enumerate(client_data_loaders):
+        for i, dataloaders_dict in enumerate(client_data_loaders):
             client_id = f"client_{i}"
             client_model = ModelFactory.create_model(
                 self.config['model'], 
@@ -126,6 +180,15 @@ class ExperimentRunner:
             # 将客户端模型移到设备
             if hasattr(client_model, 'model'):
                 client_model.model = client_model.model.to(self.device)
+            
+            # 对于多数据集客户端，我们需要合并所有数据集的数据加载器
+            # 这里我们选择第一个数据集作为主要数据集，或者可以实现数据集合并逻辑
+            if len(dataloaders_dict) == 1:
+                # 单数据集客户端
+                data_loader = list(dataloaders_dict.values())[0]
+            else:
+                # 多数据集客户端：创建一个联合数据加载器
+                data_loader = self._create_combined_dataloader(dataloaders_dict)
             
             client = FederatedClient(
                 client_id=client_id,
@@ -138,6 +201,30 @@ class ExperimentRunner:
             self.clients.append(client)
         
         print(f"✓ 客户端设置完成: {len(self.clients)} 个客户端")
+    
+    def _create_combined_dataloader(self, dataloaders_dict):
+        """创建联合数据加载器，将多个数据集合并为一个数据加载器"""
+        # 收集所有数据集
+        datasets = []
+        for dataset_name, dataloader in dataloaders_dict.items():
+            datasets.append(dataloader.dataset)
+        
+        # 合并数据集
+        combined_dataset = ConcatDataset(datasets)
+        
+        # 使用第一个数据加载器的配置参数
+        first_loader = list(dataloaders_dict.values())[0]
+        batch_size = first_loader.batch_size
+        
+        # 创建新的数据加载器
+        combined_loader = DataLoader(
+            combined_dataset,
+            batch_size=batch_size,
+            shuffle=True,
+            num_workers=0
+        )
+        
+        return combined_loader
     
     def run_federated_round(self, round_num: int) -> Dict[str, float]:
         """执行一轮联邦学习"""
