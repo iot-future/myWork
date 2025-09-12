@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aggregation 聚合模块 - 联邦学习框架文档</title>
+    <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-logo">
+                <h2>🚀 联邦学习框架</h2>
+            </div>
+            <ul class="nav-menu">
+                <li><a href="index.html" class="nav-link">首页</a></li>
+                <li><a href="core.html" class="nav-link">Core</a></li>
+                <li><a href="communication.html" class="nav-link">Communication</a></li>
+                <li><a href="data.html" class="nav-link">Data</a></li>
+                <li><a href="models.html" class="nav-link">Models</a></li>
+                <li><a href="utils.html" class="nav-link">Utils</a></li>
+                <li><a href="execution-flow.html" class="nav-link">执行流程</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <div class="container">
+        <a href="index.html" class="back-button">← 返回首页</a>
+        
+        <header class="hero">
+            <h1>🔗 Aggregation 聚合模块</h1>
+            <p class="hero-subtitle">联邦学习模型聚合算法的实现</p>
+        </header>
+
+        <div class="content-section">
+            <h2>模块概述</h2>
+            <p>Aggregation 模块实现了联邦学习中的模型聚合算法，主要负责将多个客户端的本地模型更新合并为全局模型。该模块目前实现了经典的 FedAvg（联邦平均）算法，并提供了易于扩展的框架来支持其他聚合策略。</p>
+            
+            <div class="info-box">
+                <strong>核心功能：</strong> 将分布式训练的客户端模型参数安全高效地聚合为统一的全局模型。
+            </div>
+        </div>
+
+        <div class="content-section">
+            <h2>📁 文件结构</h2>
+            <pre><code>aggregation/
+├── __init__.py          # 模块初始化
+└── federated_avg.py     # FedAvg 联邦平均算法实现</code></pre>
+        </div>
+
+        <div class="content-section">
+            <h2>🧮 FederatedAveraging 联邦平均算法</h2>
+            <p>FedAvg 是最经典的联邦学习聚合算法，通过对客户端模型参数进行加权平均来更新全局模型。该实现支持均等权重和自定义权重两种模式。</p>
+            
+            <h3>算法原理</h3>
+            <div class="architecture-content">
+                <div class="architecture-diagram">
+                    <div class="arch-layer">
+                        <h4>1. 收集客户端更新</h4>
+                        <div class="arch-components">
+                            <span>客户端参数</span>
+                            <span>训练指标</span>
+                        </div>
+                    </div>
+                    <div class="arch-layer">
+                        <h4>2. 权重计算</h4>
+                        <div class="arch-components">
+                            <span>均等权重</span>
+                            <span>自定义权重</span>
+                            <span>权重归一化</span>
+                        </div>
+                    </div>
+                    <div class="arch-layer">
+                        <h4>3. 参数聚合</h4>
+                        <div class="arch-components">
+                            <span>加权平均</span>
+                            <span>逐层计算</span>
+                        </div>
+                    </div>
+                    <div class="arch-layer">
+                        <h4>4. 返回结果</h4>
+                        <div class="arch-components">
+                            <span>聚合参数</span>
+                            <span>全局模型</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="architecture-description">
+                    <h4>算法特点</h4>
+                    <ul>
+                        <li><strong>加权平均</strong>：支持基于数据量或性能的权重分配</li>
+                        <li><strong>参数保护</strong>：使用深拷贝避免原始数据被修改</li>
+                        <li><strong>类型兼容</strong>：支持新旧两种数据格式</li>
+                        <li><strong>鲁棒性</strong>：处理异常情况和边界条件</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="content-section">
+            <h2>🔧 核心方法详解</h2>
+            
+            <h3>初始化方法</h3>
+            <ul class="method-list">
+                <li>
+                    <div class="method-signature">__init__()</div>
+                    <div class="method-description">初始化联邦平均聚合器，无需参数</div>
+                </li>
+            </ul>
+
+            <h3>聚合方法</h3>
+            <ul class="method-list">
+                <li>
+                    <div class="method-signature">aggregate(client_updates: List[Dict[str, Any]], client_weights: Dict[str, float] = None) -> Dict[str, Any]</div>
+                    <div class="method-description">执行联邦平均聚合，返回聚合后的模型参数</div>
+                </li>
+            </ul>
+
+            <h3>参数说明</h3>
+            <table class="property-table">
+                <tr>
+                    <th>参数名</th>
+                    <th>类型</th>
+                    <th>描述</th>
+                </tr>
+                <tr>
+                    <td>client_updates</td>
+                    <td>List[Dict[str, Any]]</td>
+                    <td>客户端更新列表，每个元素包含 'parameters' 和 'metrics'</td>
+                </tr>
+                <tr>
+                    <td>client_weights</td>
+                    <td>Dict[str, float]</td>
+                    <td>客户端权重字典，如果为 None 则使用均等权重</td>
+                </tr>
+            </table>
+
+            <h3>返回值</h3>
+            <table class="property-table">
+                <tr>
+                    <th>返回类型</th>
+                    <th>描述</th>
+                </tr>
+                <tr>
+                    <td>Dict[str, Any]</td>
+                    <td>聚合后的模型参数字典，可直接用于模型更新</td>
+                </tr>
+            </table>
+        </div>
+
+        <div class="content-section">
+            <h2>📊 聚合过程详解</h2>
+            
+            <h3>1. 参数提取</h3>
+            <pre><code># 支持两种数据格式
+# 新格式：{'parameters': {...}, 'metrics': {...}}
+# 旧格式：直接是参数字典
+
+client_params_list = []
+for update in client_updates:
+    if isinstance(update, dict) and 'parameters' in update:
+        client_params_list.append(update['parameters'])  # 新格式
+    else:
+        client_params_list.append(update)  # 向后兼容旧格式</code></pre>
+
+            <h3>2. 权重处理</h3>
+            <pre><code># 权重归一化
+if client_weights is None or len(client_weights) == 0:
+    # 均等权重
+    num_clients = len(client_params_list)
+    weights = [1.0 / num_clients] * num_clients
+else:
+    # 自定义权重
+    weights = list(client_weights.values())
+    total_weight = sum(weights)
+    weights = [w / total_weight for w in weights]  # 归一化</code></pre>
+
+            <h3>3. 参数聚合</h3>
+            <pre><code># 加权平均聚合
+for i, client_params in enumerate(client_params_list):
+    weight = weights[i]
+    
+    if aggregated_params is None:
+        # 初始化聚合参数（深拷贝第一个客户端参数）
+        aggregated_params = copy.deepcopy(client_params)
+        for key in aggregated_params:
+            aggregated_params[key] *= weight
+    else:
+        # 累加加权参数
+        for key in client_params:
+            if key in aggregated_params:
+                aggregated_params[key] += client_params[key] * weight</code></pre>
+        </div>
+
+        <div class="content-section">
+            <h2>💡 使用示例</h2>
+            
+            <h3>基础使用（均等权重）</h3>
+            <pre><code># 创建聚合器
+aggregator = FederatedAveraging()
+
+# 客户端更新（新格式）
+client_updates = [
+    {
+        'parameters': client1_params,
+        'metrics': {'loss': 0.1, 'accuracy': 0.95}
+    },
+    {
+        'parameters': client2_params,
+        'metrics': {'loss': 0.15, 'accuracy': 0.92}
+    },
+    {
+        'parameters': client3_params,
+        'metrics': {'loss': 0.12, 'accuracy': 0.94}
+    }
+]
+
+# 执行聚合
+aggregated_params = aggregator.aggregate(client_updates)
+print(f"聚合完成，参数层数: {len(aggregated_params)}")</code></pre>
+
+            <h3>使用自定义权重</h3>
+            <pre><code># 基于数据量的权重分配
+client_weights = {
+    'client_0': 100,  # 100个样本
+    'client_1': 150,  # 150个样本
+    'client_2': 80    # 80个样本
+}
+
+# 执行加权聚合
+aggregated_params = aggregator.aggregate(client_updates, client_weights)
+
+# 权重会自动归一化：
+# client_0: 100/330 ≈ 0.303
+# client_1: 150/330 ≈ 0.455  
+# client_2: 80/330 ≈ 0.242</code></pre>
+
+            <h3>在服务器中使用</h3>
+            <pre><code>class FederatedServer(BaseServer):
+    def __init__(self, global_model, aggregator):
+        super().__init__()
+        self.global_model = global_model
+        self.aggregator = aggregator
+        self.client_weights = {}
+    
+    def aggregate(self, client_updates):
+        # 使用聚合器进行聚合
+        aggregated_params = self.aggregator.aggregate(
+            client_updates, 
+            self.client_weights
+        )
+        
+        # 更新全局模型
+        self.global_model.set_parameters(aggregated_params)
+        
+        return aggregated_params</code></pre>
+
+            <h3>处理异常情况</h3>
+            <pre><code>def safe_aggregate(aggregator, client_updates, client_weights=None):
+    try:
+        if not client_updates:
+            print("⚠️ 没有客户端更新")
+            return None
+        
+        aggregated_params = aggregator.aggregate(client_updates, client_weights)
+        print(f"✓ 成功聚合 {len(client_updates)} 个客户端更新")
+        return aggregated_params
+        
+    except ValueError as e:
+        print(f"❌ 聚合失败: {e}")
+        return None
+    except Exception as e:
+        print(f"❌ 意外错误: {e}")
+        return None</code></pre>
+        </div>
+
+        <div class="content-section">
+            <h2>🔧 扩展其他聚合算法</h2>
+            
+            <h3>FedProx 聚合算法</h3>
+            <pre><code>class FederatedProx:
+    """FedProx 聚合算法实现"""
+    
+    def __init__(self, mu=0.01):
+        self.mu = mu  # 正则化参数
+    
+    def aggregate(self, client_updates, client_weights=None, global_model_params=None):
+        # 基础 FedAvg 聚合
+        basic_aggregator = FederatedAveraging()
+        aggregated_params = basic_aggregator.aggregate(client_updates, client_weights)
+        
+        if global_model_params is not None:
+            # 添加 FedProx 正则化
+            for key in aggregated_params:
+                if key in global_model_params:
+                    # 向全局模型参数收敛
+                    aggregated_params[key] = (
+                        aggregated_params[key] * (1 - self.mu) + 
+                        global_model_params[key] * self.mu
+                    )
+        
+        return aggregated_params</code></pre>
+
+            <h3>基于性能的自适应权重</h3>
+            <pre><code>class AdaptiveWeightAggregator:
+    """基于客户端性能的自适应权重聚合"""
+    
+    def __init__(self, alpha=0.5):
+        self.alpha = alpha  # 性能权重因子
+    
+    def calculate_performance_weights(self, client_updates):
+        """基于准确率计算权重"""
+        weights = {}
+        accuracies = []
+        
+        # 提取准确率
+        for i, update in enumerate(client_updates):
+            if 'metrics' in update and 'accuracy' in update['metrics']:
+                accuracy = update['metrics']['accuracy']
+            else:
+                accuracy = 0.5  # 默认值
+            accuracies.append(accuracy)
+        
+        # 转换为权重（准确率越高权重越大）
+        total_accuracy = sum(accuracies)
+        if total_accuracy > 0:
+            for i, accuracy in enumerate(accuracies):
+                weights[f'client_{i}'] = accuracy / total_accuracy
+        else:
+            # 均等权重作为后备
+            for i in range(len(client_updates)):
+                weights[f'client_{i}'] = 1.0 / len(client_updates)
+        
+        return weights
+    
+    def aggregate(self, client_updates, data_weights=None):
+        # 计算性能权重
+        perf_weights = self.calculate_performance_weights(client_updates)
+        
+        # 结合数据量权重和性能权重
+        if data_weights is not None:
+            combined_weights = {}
+            for key in perf_weights:
+                if key in data_weights:
+                    combined_weights[key] = (
+                        self.alpha * perf_weights[key] + 
+                        (1 - self.alpha) * data_weights[key]
+                    )
+                else:
+                    combined_weights[key] = perf_weights[key]
+        else:
+            combined_weights = perf_weights
+        
+        # 使用基础聚合器
+        aggregator = FederatedAveraging()
+        return aggregator.aggregate(client_updates, combined_weights)</code></pre>
+
+            <h3>安全聚合（Byzantine-robust）</h3>
+            <pre><code>class ByzantineRobustAggregator:
+    """拜占庭容错聚合算法"""
+    
+    def __init__(self, byzantine_ratio=0.2):
+        self.byzantine_ratio = byzantine_ratio
+    
+    def trim_mean_aggregate(self, client_updates, trim_ratio=0.2):
+        """Trimmed Mean 聚合"""
+        if not client_updates:
+            raise ValueError("No client updates provided")
+        
+        # 提取参数
+        client_params_list = []
+        for update in client_updates:
+            if isinstance(update, dict) and 'parameters' in update:
+                client_params_list.append(update['parameters'])
+            else:
+                client_params_list.append(update)
+        
+        aggregated_params = {}
+        
+        # 对每个参数层进行 trimmed mean
+        for key in client_params_list[0].keys():
+            param_values = [params[key] for params in client_params_list]
+            
+            # 计算需要修剪的数量
+            n_clients = len(param_values)
+            n_trim = int(n_clients * trim_ratio / 2)
+            
+            if n_trim > 0:
+                # 按值排序并修剪极值
+                sorted_values = sorted(param_values, key=lambda x: torch.norm(x).item())
+                trimmed_values = sorted_values[n_trim:-n_trim] if n_trim < n_clients//2 else sorted_values
+            else:
+                trimmed_values = param_values
+            
+            # 计算均值
+            if trimmed_values:
+                aggregated_params[key] = sum(trimmed_values) / len(trimmed_values)
+            else:
+                aggregated_params[key] = param_values[0]  # 后备方案
+        
+        return aggregated_params</code></pre>
+        </div>
+
+        <div class="content-section">
+            <h2>📈 性能分析与优化</h2>
+            
+            <h3>计算复杂度</h3>
+            <ul>
+                <li><strong>时间复杂度：</strong> O(n × p)，其中 n 是客户端数量，p 是参数数量</li>
+                <li><strong>空间复杂度：</strong> O(p)，主要用于存储聚合后的参数</li>
+                <li><strong>通信复杂度：</strong> O(n × p)，需要传输所有客户端参数</li>
+            </ul>
+
+            <h3>优化策略</h3>
+            <div class="warning-box">
+                <strong>内存优化：</strong> 对于大型模型，考虑逐层聚合而非一次性加载所有参数。
+            </div>
+            
+            <div class="info-box">
+                <strong>并行处理：</strong> 可以并行计算不同层的参数聚合，提高计算效率。
+            </div>
+            
+            <pre><code># 内存友好的逐层聚合示例
+def memory_efficient_aggregate(self, client_updates, client_weights=None):
+    """内存友好的聚合实现"""
+    if not client_updates:
+        raise ValueError("No client updates provided")
+    
+    # 获取参数键列表
+    param_keys = list(client_updates[0]['parameters'].keys())
+    aggregated_params = {}
+    
+    # 逐层聚合
+    for key in param_keys:
+        layer_params = []
+        for update in client_updates:
+            layer_params.append(update['parameters'][key])
+        
+        # 聚合当前层
+        aggregated_layer = self._aggregate_single_layer(layer_params, client_weights)
+        aggregated_params[key] = aggregated_layer
+        
+        # 清理临时数据
+        del layer_params
+    
+    return aggregated_params</code></pre>
+        </div>
+
+        <div class="content-section">
+            <h2>⚠️ 注意事项</h2>
+            <div class="warning-box">
+                <strong>数据格式：</strong> 确保所有客户端更新具有相同的参数结构和数据类型。
+            </div>
+            
+            <div class="warning-box">
+                <strong>权重归一化：</strong> 自定义权重会自动归一化，确保权重总和为 1。
+            </div>
+            
+            <div class="warning-box">
+                <strong>异常处理：</strong> 当没有客户端更新时，aggregate 方法会抛出 ValueError。
+            </div>
+            
+            <div class="info-box">
+                <strong>向后兼容：</strong> 支持新旧两种客户端更新格式，便于渐进式升级。
+            </div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <div class="footer-content">
+            <p>&copy; 2025 联邦学习框架. 所有权利保留.</p>
+            <p><a href="communication.html">上一页：Communication 模块</a> | <a href="data.html">下一页：Data 模块</a></p>
+        </div>
+    </footer>
+
+    <script src="assets/script.js"></script>
+</body>
+</html>

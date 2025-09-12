@@ -1,0 +1,770 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Utils 工具模块 - 联邦学习框架文档</title>
+    <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-logo">
+                <h2>🚀 联邦学习框架</h2>
+            </div>
+            <ul class="nav-menu">
+                <li><a href="index.html" class="nav-link">首页</a></li>
+                <li><a href="core.html" class="nav-link">Core</a></li>
+                <li><a href="communication.html" class="nav-link">Communication</a></li>
+                <li><a href="aggregation.html" class="nav-link">Aggregation</a></li>
+                <li><a href="data.html" class="nav-link">Data</a></li>
+                <li><a href="models.html" class="nav-link">Models</a></li>
+                <li><a href="execution-flow.html" class="nav-link">执行流程</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <div class="container">
+        <a href="index.html" class="back-button">← 返回首页</a>
+        
+        <header class="hero">
+            <h1>🛠️ Utils 工具模块</h1>
+            <p class="hero-subtitle">联邦学习实验的配置管理、执行控制和结果处理工具集</p>
+        </header>
+
+        <div class="content-section">
+            <h2>模块概述</h2>
+            <p>Utils 模块是联邦学习框架的工具集合，提供了实验配置管理、实验执行、结果处理、日志记录等核心功能。该模块通过模块化设计，将复杂的实验流程分解为可复用的工具组件，大大简化了联邦学习实验的开发和执行。</p>
+            
+            <div class="info-box">
+                <strong>核心价值：</strong> 提供完整的实验生命周期管理，从配置解析到结果分析的一站式工具支持。
+            </div>
+        </div>
+
+        <div class="content-section">
+            <h2>📁 文件结构</h2>
+            <pre><code>utils/
+├── __init__.py                  # 模块初始化
+├── config_manager.py            # 配置文件管理和验证
+├── experiment_runner.py         # 实验执行控制器
+├── results_handler.py           # 实验结果处理和分析
+├── model_factory.py             # 模型工厂模式实现
+├── optimizer_factory.py         # 优化器工厂模式实现
+├── device_manager.py            # 设备（CPU/GPU）管理
+├── evaluation_manager.py        # 模型评估管理器
+├── dataset_stats.py             # 数据集统计工具
+└── wandb_logger.py              # WandB 日志集成</code></pre>
+        </div>
+
+        <div class="content-section">
+            <h2>⚙️ ConfigManager 配置管理器</h2>
+            <p>负责YAML配置文件的加载、验证和命令行参数覆盖，确保实验配置的正确性和灵活性。</p>
+            
+            <h3>核心功能</h3>
+            <ul class="method-list">
+                <li>
+                    <div class="method-signature">load_config(config_file: str) -> Dict[str, Any]</div>
+                    <div class="method-description">加载YAML配置文件，支持相对路径和绝对路径</div>
+                </li>
+                <li>
+                    <div class="method-signature">_validate_config(config: Dict[str, Any])</div>
+                    <div class="method-description">验证配置文件完整性，检查必需的配置项和数据集配置</div>
+                </li>
+                <li>
+                    <div class="method-signature">override_config(config: Dict[str, Any], args: argparse.Namespace) -> Dict[str, Any]</div>
+                    <div class="method-description">使用命令行参数覆盖配置文件中的设置</div>
+                </li>
+                <li>
+                    <div class="method-signature">create_parser() -> argparse.ArgumentParser</div>
+                    <div class="method-description">创建命令行参数解析器，支持常用参数快速覆盖</div>
+                </li>
+            </ul>
+
+            <h3>支持的命令行参数</h3>
+            <table class="property-table">
+                <tr>
+                    <th>参数名</th>
+                    <th>配置路径</th>
+                    <th>描述</th>
+                </tr>
+                <tr>
+                    <td>--rounds</td>
+                    <td>experiment.rounds</td>
+                    <td>联邦学习训练轮数</td>
+                </tr>
+                <tr>
+                    <td>--num-clients</td>
+                    <td>client.num_clients</td>
+                    <td>参与训练的客户端数量</td>
+                </tr>
+                <tr>
+                    <td>--local-epochs</td>
+                    <td>client.local_epochs</td>
+                    <td>客户端本地训练轮数</td>
+                </tr>
+                <tr>
+                    <td>--learning-rate</td>
+                    <td>client.learning_rate, model.learning_rate</td>
+                    <td>学习率（同时设置客户端和模型）</td>
+                </tr>
+                <tr>
+                    <td>--batch-size</td>
+                    <td>data.batch_size</td>
+                    <td>训练批大小</td>
+                </tr>
+                <tr>
+                    <td>--data-dir</td>
+                    <td>data.data_dir</td>
+                    <td>数据集存储目录</td>
+                </tr>
+            </table>
+
+            <h3>配置验证规则</h3>
+            <ul>
+                <li><strong>必需节点：</strong> experiment, client, data, model</li>
+                <li><strong>客户端数据集：</strong> 每个客户端必须配置至少一个数据集</li>
+                <li><strong>数据集存在性：</strong> 客户端配置的数据集必须在data.datasets中定义</li>
+                <li><strong>数量一致性：</strong> client_datasets配置数量必须与num_clients匹配</li>
+            </ul>
+        </div>
+
+        <div class="content-section">
+            <h2>🚀 ExperimentRunner 实验执行器</h2>
+            <p>联邦学习实验的核心控制器，负责实验的完整生命周期管理，包括环境设置、训练执行和结果收集。</p>
+            
+            <h3>生命周期管理</h3>
+            <div class="architecture-content">
+                <div class="architecture-diagram">
+                    <div class="arch-layer">
+                        <h4>1. 实验初始化</h4>
+                        <div class="arch-components">
+                            <span>随机种子设置</span>
+                            <span>设备检测</span>
+                            <span>WandB配置</span>
+                        </div>
+                    </div>
+                    <div class="arch-layer">
+                        <h4>2. 组件设置</h4>
+                        <div class="arch-components">
+                            <span>数据加载器</span>
+                            <span>模型和服务器</span>
+                            <span>客户端创建</span>
+                        </div>
+                    </div>
+                    <div class="arch-layer">
+                        <h4>3. 训练执行</h4>
+                        <div class="arch-components">
+                            <span>联邦轮次</span>
+                            <span>客户端训练</span>
+                            <span>服务器聚合</span>
+                        </div>
+                    </div>
+                    <div class="arch-layer">
+                        <h4>4. 结果处理</h4>
+                        <div class="arch-components">
+                            <span>指标收集</span>
+                            <span>日志记录</span>
+                            <span>结果保存</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="architecture-description">
+                    <h4>执行特点</h4>
+                    <ul>
+                        <li><strong>自动化流程：</strong> 一键式实验执行</li>
+                        <li><strong>进度监控：</strong> 实时显示训练进度</li>
+                        <li><strong>异常处理：</strong> 优雅处理训练异常</li>
+                        <li><strong>结果记录：</strong> 完整的实验日志</li>
+                    </ul>
+                </div>
+            </div>
+
+            <h3>核心方法</h3>
+            <ul class="method-list">
+                <li>
+                    <div class="method-signature">__init__(config: Dict[str, Any])</div>
+                    <div class="method-description">初始化实验执行器，解析配置并设置基础环境</div>
+                </li>
+                <li>
+                    <div class="method-signature">run_experiment() -> Dict[str, Any]</div>
+                    <div class="method-description">执行完整的联邦学习实验，返回实验结果</div>
+                </li>
+                <li>
+                    <div class="method-signature">setup_data()</div>
+                    <div class="method-description">设置数据加载器，为每个客户端分配数据</div>
+                </li>
+                <li>
+                    <div class="method-signature">setup_server()</div>
+                    <div class="method-description">创建全局模型和联邦学习服务器</div>
+                </li>
+                <li>
+                    <div class="method-signature">setup_clients()</div>
+                    <div class="method-description">创建联邦学习客户端列表</div>
+                </li>
+                <li>
+                    <div class="method-signature">run_federated_round(round_num: int) -> Dict[str, float]</div>
+                    <div class="method-description">执行单轮联邦学习，包括客户端训练和服务器聚合</div>
+                </li>
+            </ul>
+
+            <h3>实验配置支持</h3>
+            <table class="property-table">
+                <tr>
+                    <th>配置项</th>
+                    <th>功能</th>
+                    <th>默认值</th>
+                </tr>
+                <tr>
+                    <td>experiment.rounds</td>
+                    <td>联邦学习轮数</td>
+                    <td>10</td>
+                </tr>
+                <tr>
+                    <td>experiment.seed</td>
+                    <td>随机种子</td>
+                    <td>42</td>
+                </tr>
+                <tr>
+                    <td>evaluation.evaluate_every</td>
+                    <td>评估间隔</td>
+                    <td>1</td>
+                </tr>
+                <tr>
+                    <td>wandb.enabled</td>
+                    <td>启用WandB日志</td>
+                    <td>false</td>
+                </tr>
+            </table>
+        </div>
+
+        <div class="content-section">
+            <h2>📊 ResultsHandler 结果处理器</h2>
+            <p>负责实验结果的收集、分析和展示，提供统一的结果处理接口。</p>
+            
+            <h3>核心功能</h3>
+            <ul class="method-list">
+                <li>
+                    <div class="method-signature">print_experiment_summary(results: Dict[str, Any])</div>
+                    <div class="method-description">打印实验结果摘要，包括最终性能和训练统计</div>
+                </li>
+                <li>
+                    <div class="method-signature">save_results(results: Dict[str, Any], filepath: str)</div>
+                    <div class="method-description">保存实验结果到JSON文件</div>
+                </li>
+                <li>
+                    <div class="method-signature">load_results(filepath: str) -> Dict[str, Any]</div>
+                    <div class="method-description">从文件加载实验结果</div>
+                </li>
+                <li>
+                    <div class="method-signature">compare_experiments(results_list: List[Dict]) -> pd.DataFrame</div>
+                    <div class="method-description">比较多个实验结果，生成对比表格</div>
+                </li>
+            </ul>
+
+            <h3>结果数据结构</h3>
+            <pre><code>{
+    "experiment_config": {
+        "name": "MNIST_FedAvg",
+        "rounds": 10,
+        "num_clients": 5
+    },
+    "final_metrics": {
+        "global_accuracy": 0.9542,
+        "global_loss": 0.1234
+    },
+    "training_history": {
+        "round_metrics": [...],
+        "client_metrics": [...]
+    },
+    "execution_time": 123.45
+}</code></pre>
+        </div>
+
+        <div class="content-section">
+            <h2>🏭 ModelFactory 模型工厂</h2>
+            <p>实现模型创建的工厂模式，支持多种模型类型的统一创建接口。</p>
+            
+            <h3>支持的模型类型</h3>
+            <table class="property-table">
+                <tr>
+                    <th>模型类型</th>
+                    <th>类名</th>
+                    <th>适用场景</th>
+                </tr>
+                <tr>
+                    <td>cnn</td>
+                    <td>CNNModel</td>
+                    <td>图像分类任务</td>
+                </tr>
+                <tr>
+                    <td>clip</td>
+                    <td>CLIPModel</td>
+                    <td>多模态学习</td>
+                </tr>
+                <tr>
+                    <td>linear</td>
+                    <td>LinearModel</td>
+                    <td>简单分类任务</td>
+                </tr>
+            </table>
+
+            <h3>使用示例</h3>
+            <pre><code># 创建不同类型的模型
+cnn_model = ModelFactory.create_model({
+    'type': 'cnn',
+    'learning_rate': 0.001
+})
+
+clip_model = ModelFactory.create_model({
+    'type': 'clip',
+    'model_name': 'openai/clip-vit-base-patch32'
+})</code></pre>
+        </div>
+
+        <div class="content-section">
+            <h2>⚡ OptimizerFactory 优化器工厂</h2>
+            <p>提供统一的优化器创建接口，支持AdamW等主流优化器。</p>
+            
+            <h3>核心方法</h3>
+            <ul class="method-list">
+                <li>
+                    <div class="method-signature">create_optimizer(parameters, config: Dict[str, Any])</div>
+                    <div class="method-description">根据配置创建优化器实例</div>
+                </li>
+                <li>
+                    <div class="method-signature">get_default_config() -> Dict[str, Any]</div>
+                    <div class="method-description">获取默认优化器配置</div>
+                </li>
+            </ul>
+
+            <h3>默认配置</h3>
+            <pre><code>{
+    'type': 'AdamW',
+    'lr': 0.001,
+    'weight_decay': 0.01,
+    'betas': (0.9, 0.999),
+    'eps': 1e-8
+}</code></pre>
+        </div>
+
+        <div class="content-section">
+            <h2>🖥️ DeviceManager 设备管理器</h2>
+            <p>自动检测和管理计算设备（CPU/GPU），提供设备相关的工具函数。</p>
+            
+            <h3>核心功能</h3>
+            <ul class="method-list">
+                <li>
+                    <div class="method-signature">get_device() -> torch.device</div>
+                    <div class="method-description">自动检测并返回最佳可用设备</div>
+                </li>
+                <li>
+                    <div class="method-signature">move_model_to_device(model, device) -> model</div>
+                    <div class="method-description">将模型移动到指定设备</div>
+                </li>
+                <li>
+                    <div class="method-signature">move_tensors_to_device(*tensors, device) -> Tuple</div>
+                    <div class="method-description">将张量移动到指定设备</div>
+                </li>
+                <li>
+                    <div class="method-signature">print_device_info()</div>
+                    <div class="method-description">打印设备信息和GPU状态</div>
+                </li>
+            </ul>
+
+            <h3>设备检测逻辑</h3>
+            <pre><code>def get_device():
+    if torch.cuda.is_available():
+        return torch.device('cuda')
+    elif torch.backends.mps.is_available():  # Apple Silicon
+        return torch.device('mps')
+    else:
+        return torch.device('cpu')</code></pre>
+        </div>
+
+        <div class="content-section">
+            <h2>📈 EvaluationManager 评估管理器</h2>
+            <p>统一管理客户端和全局模型的评估过程，提供详细的性能指标。</p>
+            
+            <h3>评估功能</h3>
+            <ul class="method-list">
+                <li>
+                    <div class="method-signature">evaluate_clients(clients: List, round_num: int) -> Dict</div>
+                    <div class="method-description">评估所有客户端的本地模型性能</div>
+                </li>
+                <li>
+                    <div class="method-signature">evaluate_global_model(server, test_dataloader, round_num: int) -> Dict</div>
+                    <div class="method-description">评估全局模型在测试集上的性能</div>
+                </li>
+                <li>
+                    <div class="method-signature">create_test_dataloader(dataset_configs: List) -> DataLoader</div>
+                    <div class="method-description">创建统一的测试数据加载器</div>
+                </li>
+            </ul>
+
+            <h3>评估指标</h3>
+            <ul>
+                <li><strong>客户端指标：</strong> 本地模型在客户端数据上的损失和准确率</li>
+                <li><strong>全局指标：</strong> 全局模型在测试集上的整体性能</li>
+                <li><strong>聚合指标：</strong> 客户端性能的统计摘要（均值、标准差等）</li>
+            </ul>
+        </div>
+
+        <div class="content-section">
+            <h2>📊 DatasetStats 数据集统计</h2>
+            <p>分析和统计数据集在客户端间的分布情况，帮助理解联邦学习的数据异构性。</p>
+            
+            <h3>统计功能</h3>
+            <ul class="method-list">
+                <li>
+                    <div class="method-signature">count_clients_per_dataset(config: Dict) -> Tuple[Dict, Dict]</div>
+                    <div class="method-description">统计每个数据集被多少个客户端使用</div>
+                </li>
+            </ul>
+
+            <h3>统计输出示例</h3>
+            <pre><code># 输出示例
+数据集统计信息:
+- mnist: 被 8 个客户端使用
+- cifar10: 被 3 个客户端使用
+
+客户端详细分布:
+- mnist: client_0, client_1, client_2, client_3, client_4, client_5, client_6, client_7
+- cifar10: client_2, client_3, client_8</code></pre>
+        </div>
+
+        <div class="content-section">
+            <h2>📝 WandBLogger 日志集成</h2>
+            <p>集成Weights & Biases (WandB) 进行实验跟踪和可视化。</p>
+            
+            <h3>日志功能</h3>
+            <ul class="method-list">
+                <li>
+                    <div class="method-signature">init_wandb(config: Dict[str, Any])</div>
+                    <div class="method-description">初始化WandB项目和实验跟踪</div>
+                </li>
+                <li>
+                    <div class="method-signature">log_client_metrics(client_id: str, round_num: int, loss: float, accuracy: float)</div>
+                    <div class="method-description">记录客户端训练指标</div>
+                </li>
+                <li>
+                    <div class="method-signature">log_global_metrics(round_num: int, metrics: Dict[str, float])</div>
+                    <div class="method-description">记录全局模型评估指标</div>
+                </li>
+                <li>
+                    <div class="method-signature">finish_wandb()</div>
+                    <div class="method-description">结束WandB实验跟踪</div>
+                </li>
+            </ul>
+
+            <h3>WandB配置</h3>
+            <pre><code># 配置文件中的WandB设置
+wandb:
+  enabled: true
+  project: "federated_learning"
+  entity: "your_team"
+  tags: ["fedavg", "mnist"]
+  notes: "实验描述"</code></pre>
+        </div>
+
+        <div class="content-section">
+            <h2>💡 使用示例</h2>
+            
+            <h3>完整实验流程</h3>
+            <pre><code>#!/usr/bin/env python3
+from utils.config_manager import ConfigManager
+from utils.experiment_runner import ExperimentRunner
+from utils.results_handler import ResultsHandler
+
+def main():
+    # 1. 配置管理
+    config_manager = ConfigManager()
+    parser = config_manager.create_parser()
+    args = parser.parse_args()
+    
+    # 加载和覆盖配置
+    config = config_manager.load_config(args.config)
+    config = config_manager.override_config(config, args)
+    
+    # 2. 执行实验
+    experiment_runner = ExperimentRunner(config)
+    results = experiment_runner.run_experiment()
+    
+    # 3. 处理结果
+    ResultsHandler.print_experiment_summary(results)
+    ResultsHandler.save_results(results, "experiment_results.json")
+
+if __name__ == '__main__':
+    main()</code></pre>
+
+            <h3>自定义实验控制</h3>
+            <pre><code>class CustomExperimentRunner(ExperimentRunner):
+    """自定义实验执行器"""
+    
+    def run_federated_round(self, round_num):
+        """重写联邦轮次执行逻辑"""
+        print(f"开始第 {round_num + 1} 轮联邦学习")
+        
+        # 自定义客户端采样策略
+        selected_clients = self.sample_clients(ratio=0.8)
+        
+        # 执行客户端训练
+        client_updates = []
+        for client in selected_clients:
+            global_params = self.server.send_global_model()
+            result = client.train(global_params)
+            client_updates.append(result)
+        
+        # 服务器聚合
+        self.server.aggregate(client_updates)
+        
+        # 自定义评估逻辑
+        if round_num % 2 == 0:  # 每两轮评估一次
+            metrics = self.evaluation_manager.evaluate_global_model(
+                self.server, self.test_dataloader, round_num
+            )
+            return metrics
+        
+        return {}
+    
+    def sample_clients(self, ratio=1.0):
+        """客户端采样策略"""
+        import random
+        num_selected = int(len(self.clients) * ratio)
+        return random.sample(self.clients, num_selected)</code></pre>
+
+            <h3>批量实验执行</h3>
+            <pre><code>def run_batch_experiments():
+    """批量执行不同配置的实验"""
+    
+    # 实验配置变体
+    experiments = [
+        {'config': 'configs/mnist.yaml', 'name': 'MNIST_Baseline'},
+        {'config': 'configs/cifar10.yaml', 'name': 'CIFAR10_Baseline'},
+        {'config': 'configs/multi_dataset.yaml', 'name': 'Multi_Dataset'}
+    ]
+    
+    all_results = []
+    
+    for exp in experiments:
+        print(f"运行实验: {exp['name']}")
+        
+        # 加载配置
+        config = ConfigManager.load_config(exp['config'])
+        config['experiment']['name'] = exp['name']
+        
+        # 执行实验
+        runner = ExperimentRunner(config)
+        results = runner.run_experiment()
+        
+        # 保存结果
+        results['experiment_name'] = exp['name']
+        all_results.append(results)
+        
+        # 保存单个实验结果
+        ResultsHandler.save_results(
+            results, 
+            f"results/{exp['name']}_results.json"
+        )
+    
+    # 比较实验结果
+    comparison_df = ResultsHandler.compare_experiments(all_results)
+    print("实验比较结果:")
+    print(comparison_df)</code></pre>
+
+            <h3>配置文件动态生成</h3>
+            <pre><code>def generate_experiment_configs():
+    """动态生成实验配置文件"""
+    
+    base_config = {
+        'experiment': {
+            'name': 'Auto_Generated',
+            'rounds': 10,
+            'seed': 42
+        },
+        'client': {
+            'num_clients': 5,
+            'local_epochs': 3,
+            'learning_rate': 0.001
+        },
+        'data': {
+            'batch_size': 32,
+            'data_dir': './data',
+            'datasets': {
+                'mnist': {}
+            }
+        },
+        'model': {
+            'type': 'cnn',
+            'learning_rate': 0.001
+        }
+    }
+    
+    # 生成不同客户端数量的配置
+    for num_clients in [3, 5, 10]:
+        config = copy.deepcopy(base_config)
+        config['experiment']['name'] = f'MNIST_{num_clients}_clients'
+        config['client']['num_clients'] = num_clients
+        
+        # 生成客户端数据集配置
+        config['client']['client_datasets'] = {}
+        for i in range(num_clients):
+            config['client']['client_datasets'][f'client_{i}'] = ['mnist']
+        
+        # 保存配置文件
+        with open(f'configs/auto_mnist_{num_clients}.yaml', 'w') as f:
+            yaml.dump(config, f, default_flow_style=False)</code></pre>
+        </div>
+
+        <div class="content-section">
+            <h2>🔧 扩展工具模块</h2>
+            
+            <h3>添加新的评估指标</h3>
+            <pre><code># utils/advanced_metrics.py
+import torch
+import numpy as np
+from sklearn.metrics import f1_score, precision_score, recall_score
+
+class AdvancedMetrics:
+    """高级评估指标计算"""
+    
+    @staticmethod
+    def compute_f1_score(predictions, targets, average='weighted'):
+        """计算F1分数"""
+        pred_cpu = predictions.cpu().numpy()
+        target_cpu = targets.cpu().numpy()
+        return f1_score(target_cpu, pred_cpu, average=average)
+    
+    @staticmethod
+    def compute_precision_recall(predictions, targets, average='weighted'):
+        """计算精确率和召回率"""
+        pred_cpu = predictions.cpu().numpy()
+        target_cpu = targets.cpu().numpy()
+        
+        precision = precision_score(target_cpu, pred_cpu, average=average)
+        recall = recall_score(target_cpu, pred_cpu, average=average)
+        
+        return precision, recall
+    
+    @staticmethod
+    def compute_per_class_accuracy(predictions, targets, num_classes):
+        """计算每个类别的准确率"""
+        per_class_acc = []
+        
+        for class_idx in range(num_classes):
+            class_mask = (targets == class_idx)
+            if class_mask.sum() > 0:
+                class_predictions = predictions[class_mask]
+                class_targets = targets[class_mask]
+                accuracy = (class_predictions == class_targets).float().mean()
+                per_class_acc.append(accuracy.item())
+            else:
+                per_class_acc.append(0.0)
+        
+        return per_class_acc</code></pre>
+
+            <h3>自定义实验调度器</h3>
+            <pre><code># utils/experiment_scheduler.py
+import time
+import threading
+from queue import Queue
+
+class ExperimentScheduler:
+    """实验调度器，支持并行实验执行"""
+    
+    def __init__(self, max_workers=2):
+        self.max_workers = max_workers
+        self.experiment_queue = Queue()
+        self.results_storage = []
+        self.workers = []
+    
+    def add_experiment(self, config_path, experiment_name):
+        """添加实验到队列"""
+        self.experiment_queue.put({
+            'config_path': config_path,
+            'name': experiment_name,
+            'timestamp': time.time()
+        })
+    
+    def worker_thread(self, worker_id):
+        """工作线程执行实验"""
+        while True:
+            try:
+                experiment = self.experiment_queue.get(timeout=5)
+                print(f"Worker {worker_id} 开始执行: {experiment['name']}")
+                
+                # 执行实验
+                config = ConfigManager.load_config(experiment['config_path'])
+                runner = ExperimentRunner(config)
+                results = runner.run_experiment()
+                
+                # 存储结果
+                results['worker_id'] = worker_id
+                results['experiment_name'] = experiment['name']
+                self.results_storage.append(results)
+                
+                print(f"Worker {worker_id} 完成: {experiment['name']}")
+                self.experiment_queue.task_done()
+                
+            except Exception as e:
+                print(f"Worker {worker_id} 执行失败: {e}")
+                break
+    
+    def start_workers(self):
+        """启动工作线程"""
+        for i in range(self.max_workers):
+            worker = threading.Thread(
+                target=self.worker_thread, 
+                args=(i,),
+                daemon=True
+            )
+            worker.start()
+            self.workers.append(worker)
+    
+    def wait_completion(self):
+        """等待所有实验完成"""
+        self.experiment_queue.join()
+        return self.results_storage</code></pre>
+        </div>
+
+        <div class="content-section">
+            <h2>⚠️ 最佳实践</h2>
+            <div class="warning-box">
+                <strong>配置验证：</strong> 始终在实验开始前验证配置文件的完整性，避免长时间训练后发现配置错误。
+            </div>
+            
+            <div class="info-box">
+                <strong>实验记录：</strong> 使用WandB或结果保存功能记录所有实验，便于后续分析和比较。
+            </div>
+            
+            <div class="warning-box">
+                <strong>资源管理：</strong> 合理设置批大小和客户端数量，避免内存溢出或计算资源耗尽。
+            </div>
+            
+            <div class="info-box">
+                <strong>可重现性：</strong> 设置固定的随机种子，确保实验结果可重现。
+            </div>
+        </div>
+
+        <div class="content-section">
+            <h2>🚀 性能优化建议</h2>
+            <ul>
+                <li><strong>并行实验：</strong> 使用实验调度器并行执行多个实验配置</li>
+                <li><strong>配置缓存：</strong> 缓存验证过的配置，避免重复验证开销</li>
+                <li><strong>增量保存：</strong> 定期保存中间结果，防止意外中断导致数据丢失</li>
+                <li><strong>内存监控：</strong> 监控内存使用情况，及时清理不需要的数据</li>
+                <li><strong>设备优化：</strong> 充分利用GPU加速，合理分配计算资源</li>
+            </ul>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <div class="footer-content">
+            <p>&copy; 2025 联邦学习框架. 所有权利保留.</p>
+            <p><a href="models.html">上一页：Models 模块</a> | <a href="index.html">返回首页</a></p>
+        </div>
+    </footer>
+
+    <script src="assets/script.js"></script>
+</body>
+</html>

@@ -1,0 +1,1023 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>项目运行流程 - 联邦学习框架文档</title>
+    <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-logo">
+                <h2>🚀 联邦学习框架</h2>
+            </div>
+            <ul class="nav-menu">
+                <li><a href="index.html" class="nav-link">首页</a></li>
+                <li><a href="core.html" class="nav-link">Core</a></li>
+                <li><a href="communication.html" class="nav-link">Communication</a></li>
+                <li><a href="aggregation.html" class="nav-link">Aggregation</a></li>
+                <li><a href="data.html" class="nav-link">Data</a></li>
+                <li><a href="models.html" class="nav-link">Models</a></li>
+                <li><a href="utils.html" class="nav-link">Utils</a></li>
+                <li><a href="execution-flow.html" class="nav-link active">执行流程</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <div class="container">
+        <a href="index.html" class="back-button">← 返回首页</a>
+        
+        <header class="hero">
+            <h1>⚡ 项目运行流程</h1>
+            <p class="hero-subtitle">详解联邦学习框架的完整执行流程和模块调用顺序</p>
+        </header>
+
+        <!-- 目录导航 -->
+        <div class="content-section">
+            <h2>📋 页面目录</h2>
+            <div class="toc-grid">
+                <div class="toc-card">
+                    <h4><a href="#overview">🔄 整体运行流程概览</a></h4>
+                    <p>框架的生命周期和各阶段概述</p>
+                </div>
+                <div class="toc-card">
+                    <h4><a href="#stage1">🚀 第一阶段：程序启动</a></h4>
+                    <p>main.py 入口点和配置解析</p>
+                </div>
+                <div class="toc-card">
+                    <h4><a href="#stage2">⚙️ 第二阶段：实验初始化</a></h4>
+                    <p>ExperimentRunner 和环境设置</p>
+                </div>
+                <div class="toc-card">
+                    <h4><a href="#stage3">📊 第三阶段：数据准备</a></h4>
+                    <p>数据加载和分割</p>
+                </div>
+                <div class="toc-card">
+                    <h4><a href="#stage4">🖥️ 第四阶段：服务器设置</a></h4>
+                    <p>服务器初始化和模型设置</p>
+                </div>
+                <div class="toc-card">
+                    <h4><a href="#stage5">👥 第五阶段：客户端设置</a></h4>
+                    <p>客户端创建和配置</p>
+                </div>
+                <div class="toc-card">
+                    <h4><a href="#stage6">🔄 第六阶段：联邦训练</a></h4>
+                    <p>训练循环和模型聚合</p>
+                </div>
+                <div class="toc-card">
+                    <h4><a href="#stage7">📊 第七阶段：模型评估</a></h4>
+                    <p>模型性能评估</p>
+                </div>
+                <div class="toc-card">
+                    <h4><a href="#stage8">📝 第八阶段：日志记录</a></h4>
+                    <p>WandB 日志和监控</p>
+                </div>
+                <div class="toc-card">
+                    <h4><a href="#stage9">� 第九阶段：结果处理</a></h4>
+                    <p>结果保存和资源清理</p>
+                </div>
+                <div class="toc-card">
+                    <h4><a href="#flow-diagram">🗺️ 完整流程图</a></h4>
+                    <p>可视化执行流程</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="content-section" id="overview">
+            <h2>🔄 整体运行流程概览</h2>
+            <p>联邦学习框架从启动到结束的完整生命周期，涉及配置加载、环境初始化、数据准备、模型创建、联邦训练和结果处理等多个阶段。</p>
+            
+            <div class="architecture-content">
+                <div class="architecture-diagram">
+                    <div class="arch-layer">
+                        <h4>1. 启动阶段</h4>
+                        <div class="arch-components">
+                            <span>main.py</span>
+                            <span>配置解析</span>
+                        </div>
+                    </div>
+                    <div class="arch-layer">
+                        <h4>2. 初始化阶段</h4>
+                        <div class="arch-components">
+                            <span>环境设置</span>
+                            <span>组件创建</span>
+                        </div>
+                    </div>
+                    <div class="arch-layer">
+                        <h4>3. 训练阶段</h4>
+                        <div class="arch-components">
+                            <span>联邦轮次</span>
+                            <span>模型聚合</span>
+                        </div>
+                    </div>
+                    <div class="arch-layer">
+                        <h4>4. 结束阶段</h4>
+                        <div class="arch-components">
+                            <span>结果处理</span>
+                            <span>资源清理</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="architecture-description">
+                    <h4>流程特点</h4>
+                    <ul>
+                        <li><strong>模块化设计：</strong> 每个阶段职责明确，便于维护</li>
+                        <li><strong>错误处理：</strong> 各阶段都有异常处理机制</li>
+                        <li><strong>进度监控：</strong> 实时显示执行进度</li>
+                        <li><strong>可扩展性：</strong> 支持自定义组件和流程</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="content-section" id="stage1">
+            <h2>🚀 第一阶段：程序启动 (main.py)</h2>
+            <p>程序从 <code>main.py</code> 开始执行，这是整个联邦学习实验的入口点。</p>
+            
+            <h3>执行顺序详解</h3>
+            <div class="step">
+                <div class="step-number">1.1</div>
+                <div class="step-content">
+                    <h4><code>main()</code> 函数启动</h4>
+                    <pre><code>def main():
+    # 创建配置管理器
+    config_manager = ConfigManager()
+    
+    # 解析命令行参数
+    parser = config_manager.create_parser()
+    args = parser.parse_args()</code></pre>
+                    <p><strong>作用：</strong> 程序入口，初始化配置管理器并解析命令行参数</p>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-number">1.2</div>
+                <div class="step-content">
+                    <h4><code>ConfigManager.create_parser()</code></h4>
+                    <p><strong>模块：</strong> <code>utils/config_manager.py</code></p>
+                    <p><strong>作用：</strong> 创建命令行参数解析器，支持 --config, --rounds, --num-clients 等参数</p>
+                    <pre><code>@staticmethod
+def create_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description='联邦学习实验')
+    parser.add_argument('--config', default='configs/default.yaml')
+    parser.add_argument('--rounds', type=int, help='训练轮数')
+    # ... 更多参数</code></pre>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-number">1.3</div>
+                <div class="step-content">
+                    <h4><code>ConfigManager.load_config()</code></h4>
+                    <p><strong>模块：</strong> <code>utils/config_manager.py</code></p>
+                    <p><strong>作用：</strong> 加载YAML配置文件并验证其完整性</p>
+                    <pre><code>config = config_manager.load_config(args.config)
+# 内部调用：
+# 1. yaml.safe_load() - 解析YAML文件
+# 2. _validate_config() - 验证配置完整性</code></pre>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-number">1.4</div>
+                <div class="step-content">
+                    <h4><code>ConfigManager.override_config()</code></h4>
+                    <p><strong>模块：</strong> <code>utils/config_manager.py</code></p>
+                    <p><strong>作用：</strong> 使用命令行参数覆盖配置文件中的设置</p>
+                    <pre><code>config = config_manager.override_config(config, args)
+# 例如：--rounds 10 会覆盖 config['experiment']['rounds']</code></pre>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-number">1.5</div>
+                <div class="step-content">
+                    <h4>打印配置信息</h4>
+                    <p><strong>作用：</strong> 向用户展示关键实验配置，确认实验参数</p>
+                    <pre><code>print("🔧 实验配置")
+print(f"实验名称: {config['experiment']['name']}")
+print(f"训练轮次: {config['experiment']['rounds']}")
+# ... 更多配置信息</code></pre>
+                </div>
+            </div>
+        </div>
+
+        <div class="content-section" id="stage2">
+            <h2>⚙️ 第二阶段：实验初始化 (ExperimentRunner)</h2>
+            <p>配置加载完成后，创建 <code>ExperimentRunner</code> 实例来管理整个实验流程。</p>
+
+            <div class="step">
+                <div class="step-number">2.1</div>
+                <div class="step-content">
+                    <h4><code>ExperimentRunner.__init__()</code></h4>
+                    <p><strong>模块：</strong> <code>utils/experiment_runner.py</code></p>
+                    <p><strong>作用：</strong> 初始化实验执行器，设置基础环境</p>
+                    <pre><code>def __init__(self, config: Dict[str, Any]):
+    self.config = config
+    self.device = device_manager.get_device()  # 检测GPU/CPU
+    self.use_wandb = config.get('wandb', {}).get('enabled', False)
+    # 设置随机种子
+    self._set_random_seed(config['experiment']['seed'])</code></pre>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-number">2.2</div>
+                <div class="step-content">
+                    <h4><code>device_manager.get_device()</code></h4>
+                    <p><strong>模块：</strong> <code>utils/device_manager.py</code></p>
+                    <p><strong>作用：</strong> 自动检测最佳可用设备（CUDA > MPS > CPU）</p>
+                    <pre><code>def get_device():
+    if torch.cuda.is_available():
+        return torch.device('cuda')
+    elif torch.backends.mps.is_available():
+        return torch.device('mps')
+    else:
+        return torch.device('cpu')</code></pre>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-number">2.3</div>
+                <div class="step-content">
+                    <h4><code>ExperimentRunner.run_experiment()</code></h4>
+                    <p><strong>模块：</strong> <code>utils/experiment_runner.py</code></p>
+                    <p><strong>作用：</strong> 主实验控制流程，协调所有组件</p>
+                    <pre><code>def run_experiment(self) -> Dict[str, Any]:
+    # 1. 初始化WandB（如果启用）
+    # 2. 设置数据加载器
+    # 3. 设置服务器
+    # 4. 设置客户端
+    # 5. 执行联邦训练轮次
+    # 6. 收集和返回结果</code></pre>
+                </div>
+            </div>
+        </div>
+
+        <div class="content-section" id="stage3">
+            <h2>📊 第三阶段：数据准备 (Data Setup)</h2>
+            <p>为每个客户端创建专用的数据加载器，实现数据分区。</p>
+
+            <div class="step">
+                <div class="step-number">3.1</div>
+                <div class="step-content">
+                    <h4><code>ExperimentRunner.setup_data()</code></h4>
+                    <p><strong>模块：</strong> <code>utils/experiment_runner.py</code></p>
+                    <p><strong>作用：</strong> 为所有客户端创建数据加载器</p>
+                    <pre><code>def setup_data(self):
+    data_config = self.config['data']
+    client_config = self.config['client']
+    
+    # 为每个客户端创建数据加载器
+    client_data_loaders = []
+    for client_id in range(num_clients):
+        # 获取客户端数据集配置
+        client_dataset_names = client_datasets_config[f"client_{client_id}"]
+        # 创建数据加载器</code></pre>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-number">3.2</div>
+                <div class="step-content">
+                    <h4><code>get_client_dataloaders()</code></h4>
+                    <p><strong>模块：</strong> <code>data/data_loader.py</code></p>
+                    <p><strong>作用：</strong> 为单个客户端创建数据加载器字典</p>
+                    <pre><code>def get_client_dataloaders(dataset_configs, client_id=0, total_clients=1, batch_size=32):
+    dataloaders = {}
+    for dataset_config in dataset_configs:
+        dataset_name = dataset_config['name']
+        
+        # 1. 验证数据集名称
+        validated_name = _validate_dataset_name(dataset_name)
+        
+        # 2. 创建数据集实例
+        dataset_class = SUPPORTED_DATASETS[validated_name]
+        dataset = dataset_class(**dataset_config)
+        
+        # 3. 计算客户端数据范围
+        start_idx, end_idx = _calculate_client_data_range(
+            client_id, total_clients, len(dataset)
+        )
+        
+        # 4. 创建数据子集
+        subset = _create_dataset_subset(dataset, start_idx, end_idx)
+        
+        # 5. 创建数据加载器
+        dataloader = DataLoader(subset, batch_size=batch_size, shuffle=True)
+        dataloaders[dataset_name] = dataloader</code></pre>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-number">3.3</div>
+                <div class="step-content">
+                    <h4>数据集类初始化</h4>
+                    <p><strong>模块：</strong> <code>data/datasets/mnist.py</code> 或 <code>data/datasets/cifar10.py</code></p>
+                    <p><strong>作用：</strong> 加载和预处理数据集</p>
+                    <pre><code># MNIST数据集示例
+class MNIST(Dataset):
+    def __init__(self, data_root: str, train: bool = True, preprocess=None):
+        # 设置数据变换
+        transform = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize((0.1307,), (0.3081,))
+        ])
+        
+        # 下载并加载数据
+        self.dataset = datasets.MNIST(
+            root=data_root, train=train, download=True, transform=transform
+        )</code></pre>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-number">3.4</div>
+                <div class="step-content">
+                    <h4>数据统计打印</h4>
+                    <p><strong>作用：</strong> 显示每个客户端的数据分布情况</p>
+                    <pre><code>def _print_data_statistics(self, client_data_loaders, num_clients):
+    print(f"✓ 数据加载完成: {num_clients} 个客户端")
+    for client_id, dataloaders_dict in enumerate(client_data_loaders):
+        # 统计每个客户端的数据量
+        total_client_samples = 0
+        for dataset_name, dataloader in dataloaders_dict.items():
+            samples = len(dataloader.dataset)
+            total_client_samples += samples
+        print(f"  客户端 {client_id}: 总计 {total_client_samples} 样本")</code></pre>
+                </div>
+            </div>
+        </div>
+
+        <div class="content-section" id="stage4">
+            <h2>🖥️ 第四阶段：服务器设置 (Server Setup)</h2>
+            <p>创建全局模型和联邦学习服务器。</p>
+
+            <div class="step">
+                <div class="step-number">4.1</div>
+                <div class="step-content">
+                    <h4><code>ExperimentRunner.setup_server()</code></h4>
+                    <p><strong>模块：</strong> <code>utils/experiment_runner.py</code></p>
+                    <p><strong>作用：</strong> 创建全局模型和服务器实例</p>
+                    <pre><code>def setup_server(self):
+    # 1. 创建全局模型
+    global_model = ModelFactory.create_model(
+        self.config['model'],
+        self.config.get('optimizer', {})
+    )
+    
+    # 2. 移动模型到设备
+    global_model = device_manager.move_model_to_device(global_model, self.device)
+    
+    # 3. 创建聚合器和服务器
+    aggregator = FederatedAveraging()
+    self.server = FederatedServer(global_model, aggregator)</code></pre>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-number">4.2</div>
+                <div class="step-content">
+                    <h4><code>ModelFactory.create_model()</code></h4>
+                    <p><strong>模块：</strong> <code>utils/model_factory.py</code></p>
+                    <p><strong>作用：</strong> 根据配置创建相应类型的模型</p>
+                    <pre><code>@staticmethod
+def create_model(model_config, optimizer_config=None):
+    model_type = model_config.get('type', 'cnn')
+    
+    if model_type == 'cnn':
+        return CNNModel(optimizer_config)
+    elif model_type == 'clip':
+        return CLIPModel(optimizer_config)
+    else:
+        raise ValueError(f"不支持的模型类型: {model_type}")</code></pre>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-number">4.3</div>
+                <div class="step-content">
+                    <h4>模型类初始化</h4>
+                    <p><strong>模块：</strong> <code>models/cnn.py</code> 或 <code>models/clip.py</code></p>
+                    <p><strong>作用：</strong> 创建神经网络结构和优化器</p>
+                    <pre><code># CNN模型示例
+class CNNModel(BaseModel):
+    def __init__(self, optimizer_config=None):
+        super().__init__(optimizer_config)
+        
+        # 创建CNN模型结构
+        self.model = nn.Sequential(
+            nn.Conv2d(3, 32, kernel_size=5),
+            nn.ReLU(),
+            nn.MaxPool2d(2, 2),
+            # ... 更多层
+        )
+        
+        # 创建损失函数和优化器
+        self.criterion = nn.CrossEntropyLoss()
+        self.create_optimizer(self.model.parameters())</code></pre>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-number">4.4</div>
+                <div class="step-content">
+                    <h4><code>FederatedServer.__init__()</code></h4>
+                    <p><strong>模块：</strong> <code>core/server.py</code></p>
+                    <p><strong>作用：</strong> 初始化联邦学习服务器</p>
+                    <pre><code>def __init__(self, global_model, aggregator):
+    super().__init__()
+    self.global_model = global_model
+    self.aggregator = aggregator
+    self.round_num = 0
+    self.client_weights = {}  # 客户端权重</code></pre>
+                </div>
+            </div>
+        </div>
+
+        <div class="content-section" id="stage5">
+            <h2>👥 第五阶段：客户端设置 (Client Setup)</h2>
+            <p>为每个客户端创建联邦学习客户端实例。</p>
+
+            <div class="step">
+                <div class="step-number">5.1</div>
+                <div class="step-content">
+                    <h4><code>ExperimentRunner.setup_clients()</code></h4>
+                    <p><strong>模块：</strong> <code>utils/experiment_runner.py</code></p>
+                    <p><strong>作用：</strong> 创建所有客户端实例</p>
+                    <pre><code>def setup_clients(self):
+    self.clients = []
+    
+    for client_id in range(self.config['client']['num_clients']):
+        # 1. 创建客户端模型（复制服务器模型结构）
+        client_model = ModelFactory.create_model(
+            self.config['model'],
+            self.config.get('optimizer', {})
+        )
+        
+        # 2. 移动模型到设备
+        client_model = device_manager.move_model_to_device(client_model, self.device)
+        
+        # 3. 创建客户端实例
+        client = FederatedClient(
+            client_id=f"client_{client_id}",
+            model=client_model,
+            data_loader=self.client_data_loaders[client_id],
+            epochs=self.config['client']['local_epochs'],
+            learning_rate=self.config['client']['learning_rate'],
+            device=self.device
+        )
+        
+        self.clients.append(client)</code></pre>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-number">5.2</div>
+                <div class="step-content">
+                    <h4><code>FederatedClient.__init__()</code></h4>
+                    <p><strong>模块：</strong> <code>core/client.py</code></p>
+                    <p><strong>作用：</strong> 初始化联邦学习客户端</p>
+                    <pre><code>def __init__(self, client_id: str, model, data_loader=None, epochs=1, 
+             learning_rate=0.01, device=None):
+    super().__init__(client_id)
+    self.model = model
+    self.data_loader = data_loader
+    self.epochs = epochs
+    self.learning_rate = learning_rate
+    self.device = device or torch.device('cpu')</code></pre>
+                </div>
+            </div>
+        </div>
+
+        <div class="content-section" id="stage6">
+            <h2>🔄 第六阶段：联邦训练循环 (Federated Training)</h2>
+            <p>执行多轮联邦学习训练，这是整个框架的核心部分。</p>
+
+            <div class="step">
+                <div class="step-number">6.1</div>
+                <div class="step-content">
+                    <h4>主训练循环</h4>
+                    <p><strong>模块：</strong> <code>utils/experiment_runner.py</code></p>
+                    <p><strong>作用：</strong> 控制多轮联邦学习的执行</p>
+                    <pre><code>for round_num in range(self.config['experiment']['rounds']):
+    print(f"\n🔄 联邦学习轮次 {round_num + 1}/{self.config['experiment']['rounds']}")
+    
+    # 执行一轮联邦学习
+    round_metrics = self.run_federated_round(round_num)
+    
+    # 记录轮次结果
+    results['rounds'].append({
+        'round': round_num + 1,
+        'metrics': round_metrics
+    })</code></pre>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-number">6.2</div>
+                <div class="step-content">
+                    <h4><code>ExperimentRunner.run_federated_round()</code></h4>
+                    <p><strong>模块：</strong> <code>utils/experiment_runner.py</code></p>
+                    <p><strong>作用：</strong> 执行单轮联邦学习</p>
+                    <pre><code>def run_federated_round(self, round_num: int) -> Dict[str, float]:
+    # 1. 获取全局模型参数
+    global_model_params = self.server.send_global_model()
+    
+    # 2. 客户端本地训练
+    client_updates = []
+    with tqdm(total=len(self.clients), desc="客户端训练") as pbar:
+        for client in self.clients:
+            # 客户端训练
+            client_result = client.train(global_model_params, show_progress=False)
+            client_updates.append(client_result)
+            
+            # 更新进度条
+            loss = client_result['metrics']['loss']
+            pbar.update(1)
+            pbar.set_postfix({'Loss': f'{loss:.3f}'})
+    
+    # 3. 服务器聚合
+    self.server.aggregate(client_updates)
+    
+    # 4. 评估（如果需要）
+    metrics = {}
+    if round_num % self.config['evaluation']['evaluate_every'] == 0:
+        metrics = self.evaluation_manager.evaluate_global_model(
+            self.server, self.test_dataloader, round_num
+        )
+    
+    return metrics</code></pre>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-number">6.3</div>
+                <div class="step-content">
+                    <h4><code>FederatedClient.train()</code></h4>
+                    <p><strong>模块：</strong> <code>core/client.py</code></p>
+                    <p><strong>作用：</strong> 客户端本地训练</p>
+                    <pre><code>def train(self, global_model_params: Dict[str, Any], show_progress: bool = False):
+    # 1. 设置全局模型参数
+    if global_model_params:
+        self.model.set_parameters(global_model_params)
+    
+    # 2. 本地训练循环
+    total_loss = 0.0
+    total_samples = 0
+    
+    for epoch in range(self.epochs):
+        for batch_data, batch_labels in self.data_loader:
+            # 将数据移到设备
+            batch_data, batch_labels = device_manager.move_tensors_to_device(
+                batch_data, batch_labels, device=self.device
+            )
+            
+            # 执行训练步骤
+            loss = self.model.train_step(batch_data, batch_labels)
+            total_loss += loss * batch_data.size(0)
+            total_samples += batch_data.size(0)
+    
+    # 3. 计算平均损失
+    avg_loss = total_loss / total_samples if total_samples > 0 else 0.0
+    
+    # 4. 评估训练后的模型
+    eval_metrics = self.evaluate_on_local_data()
+    
+    # 5. 返回训练结果
+    return {
+        'parameters': self.model.get_parameters(),
+        'metrics': {
+            'loss': avg_loss,
+            'accuracy': eval_metrics.get('accuracy')
+        }
+    }</code></pre>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-number">6.4</div>
+                <div class="step-content">
+                    <h4><code>CNNModel.train_step()</code></h4>
+                    <p><strong>模块：</strong> <code>models/cnn.py</code></p>
+                    <p><strong>作用：</strong> 执行单步神经网络训练</p>
+                    <pre><code>def train_step(self, data, labels):
+    self.model.train()
+    
+    # 确保数据在正确设备上
+    data, labels = self._ensure_device_compatibility(data, labels)
+    
+    # 前向传播
+    outputs = self.model(data)
+    loss = self.criterion(outputs, labels)
+    
+    # 反向传播
+    self.optimizer.zero_grad()
+    loss.backward()
+    self.optimizer.step()
+    
+    return loss.item()</code></pre>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-number">6.5</div>
+                <div class="step-content">
+                    <h4><code>FederatedServer.aggregate()</code></h4>
+                    <p><strong>模块：</strong> <code>core/server.py</code></p>
+                    <p><strong>作用：</strong> 聚合客户端模型更新</p>
+                    <pre><code>def aggregate(self, client_updates: List[Dict[str, Any]]) -> Dict[str, Any]:
+    if not client_updates:
+        return self.global_model.get_parameters()
+    
+    # 使用聚合算法进行聚合
+    aggregated_params = self.aggregator.aggregate(
+        client_updates, self.client_weights
+    )
+    
+    # 更新全局模型
+    self.global_model.set_parameters(aggregated_params)
+    self.round_num += 1
+    
+    return aggregated_params</code></pre>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-number">6.6</div>
+                <div class="step-content">
+                    <h4><code>FederatedAveraging.aggregate()</code></h4>
+                    <p><strong>模块：</strong> <code>aggregation/federated_avg.py</code></p>
+                    <p><strong>作用：</strong> 执行联邦平均聚合算法</p>
+                    <pre><code>def aggregate(self, client_updates, client_weights=None):
+    # 1. 提取客户端参数
+    client_params_list = []
+    for update in client_updates:
+        if isinstance(update, dict) and 'parameters' in update:
+            client_params_list.append(update['parameters'])
+    
+    # 2. 处理权重（均等权重或自定义权重）
+    if client_weights is None:
+        num_clients = len(client_params_list)
+        weights = [1.0 / num_clients] * num_clients
+    else:
+        weights = list(client_weights.values())
+        total_weight = sum(weights)
+        weights = [w / total_weight for w in weights]
+    
+    # 3. 参数聚合
+    aggregated_params = None
+    for i, client_params in enumerate(client_params_list):
+        weight = weights[i]
+        
+        if aggregated_params is None:
+            aggregated_params = copy.deepcopy(client_params)
+            for key in aggregated_params:
+                aggregated_params[key] *= weight
+        else:
+            for key in client_params:
+                if key in aggregated_params:
+                    aggregated_params[key] += client_params[key] * weight
+    
+    return aggregated_params</code></pre>
+                </div>
+            </div>
+        </div>
+
+        <div class="content-section" id="stage7">
+            <h2>📊 第七阶段：模型评估 (Evaluation)</h2>
+            <p>定期评估全局模型和客户端模型的性能。</p>
+
+            <div class="step">
+                <div class="step-number">7.1</div>
+                <div class="step-content">
+                    <h4><code>EvaluationManager.evaluate_global_model()</code></h4>
+                    <p><strong>模块：</strong> <code>utils/evaluation_manager.py</code></p>
+                    <p><strong>作用：</strong> 评估全局模型在测试集上的性能</p>
+                    <pre><code>def evaluate_global_model(self, server, test_dataloader, round_num):
+    try:
+        print(f"  📊 评估全局模型 (轮次 {round_num + 1})")
+        
+        # 使用服务器的评估方法
+        global_metrics = server.evaluate_with_dataloader(test_dataloader)
+        
+        if global_metrics:
+            print(f"    全局准确率: {global_metrics.get('accuracy', 0):.4f}")
+            print(f"    全局损失: {global_metrics.get('loss', 0):.4f}")
+        
+        return {
+            'global_accuracy': global_metrics.get('accuracy', 0),
+            'global_loss': global_metrics.get('loss', 0)
+        }
+    except Exception as e:
+        print(f"    ⚠️  全局评估失败: {str(e)}")
+        return {}</code></pre>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-number">7.2</div>
+                <div class="step-content">
+                    <h4><code>FederatedServer.evaluate_with_dataloader()</code></h4>
+                    <p><strong>模块：</strong> <code>core/server.py</code></p>
+                    <p><strong>作用：</strong> 使用数据加载器评估全局模型</p>
+                    <pre><code>def evaluate_with_dataloader(self, test_dataloader):
+    try:
+        total_samples = 0
+        total_loss = 0.0
+        total_correct = 0
+        
+        self.global_model.model.eval()
+        
+        with torch.no_grad():
+            for batch_data, batch_labels in test_dataloader:
+                # 评估批次数据
+                metrics = self.global_model.evaluate(batch_data, batch_labels)
+                
+                batch_size = batch_data.size(0)
+                total_samples += batch_size
+                total_loss += metrics['loss'] * batch_size
+                total_correct += metrics['accuracy'] * batch_size
+        
+        return {
+            'loss': total_loss / total_samples,
+            'accuracy': total_correct / total_samples
+        }
+    except Exception as e:
+        print(f"⚠️  全局模型评估失败: {str(e)}")
+        return {}</code></pre>
+                </div>
+            </div>
+        </div>
+
+        <div class="content-section" id="stage8">
+            <h2>📝 第八阶段：日志记录 (Logging)</h2>
+            <p>记录实验过程中的各种指标和信息。</p>
+
+            <div class="step">
+                <div class="step-number">8.1</div>
+                <div class="step-content">
+                    <h4>WandB日志记录（可选）</h4>
+                    <p><strong>模块：</strong> <code>utils/wandb_logger.py</code></p>
+                    <p><strong>作用：</strong> 记录实验指标到WandB平台</p>
+                    <pre><code># 如果启用WandB
+if self.use_wandb:
+    # 记录客户端指标
+    log_client_metrics(
+        client.client_id,
+        round_num,
+        metrics.get('loss', 0.0),
+        metrics.get('accuracy')
+    )
+    
+    # 记录全局指标
+    log_global_metrics(round_num, global_metrics)</code></pre>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-number">8.2</div>
+                <div class="step-content">
+                    <h4>控制台输出</h4>
+                    <p><strong>作用：</strong> 实时显示训练进度和关键指标</p>
+                    <pre><code># 进度条显示
+with tqdm(total=len(self.clients), desc="客户端训练") as pbar:
+    for client in self.clients:
+        # ... 训练逻辑
+        pbar.update(1)
+        pbar.set_postfix({'Loss': f'{loss:.3f}'})
+
+# 评估结果输出
+print(f"    全局准确率: {global_metrics.get('accuracy', 0):.4f}")
+print(f"    全局损失: {global_metrics.get('loss', 0):.4f}")</code></pre>
+                </div>
+            </div>
+        </div>
+
+        <div class="content-section" id="stage9">
+            <h2>📋 第九阶段：结果处理 (Results Processing)</h2>
+            <p>实验完成后，收集、处理和展示实验结果。</p>
+
+            <div class="step">
+                <div class="step-number">9.1</div>
+                <div class="step-content">
+                    <h4>结果收集</h4>
+                    <p><strong>模块：</strong> <code>utils/experiment_runner.py</code></p>
+                    <p><strong>作用：</strong> 汇总所有轮次的实验结果</p>
+                    <pre><code># 在实验结束时
+end_time = time.time()
+execution_time = end_time - start_time
+
+results = {
+    'experiment_config': {
+        'name': self.config['experiment']['name'],
+        'rounds': self.config['experiment']['rounds'],
+        'num_clients': self.config['client']['num_clients'],
+        'local_epochs': self.config['client']['local_epochs']
+    },
+    'final_metrics': final_metrics,
+    'rounds': round_results,
+    'execution_time': execution_time
+}
+
+return results</code></pre>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-number">9.2</div>
+                <div class="step-content">
+                    <h4><code>ResultsHandler.print_experiment_summary()</code></h4>
+                    <p><strong>模块：</strong> <code>utils/results_handler.py</code></p>
+                    <p><strong>作用：</strong> 打印实验结果摘要</p>
+                    <pre><code>@staticmethod
+def print_experiment_summary(results: Dict[str, Any]):
+    print("📊 实验结果摘要")
+    print(f"实验名称: {results['experiment_config']['name']}")
+    print(f"执行时间: {results['execution_time']:.2f} 秒")
+    
+    # 最终性能指标
+    final_metrics = results.get('final_metrics', {})
+    if final_metrics:
+        print(f"最终全局准确率: {final_metrics.get('global_accuracy', 0):.4f}")
+        print(f"最终全局损失: {final_metrics.get('global_loss', 0):.4f}")
+    
+    # 训练轮次统计
+    rounds_data = results.get('rounds', [])
+    if rounds_data:
+        print(f"总训练轮次: {len(rounds_data)}")
+        # 显示训练趋势等</code></pre>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-number">9.3</div>
+                <div class="step-content">
+                    <h4>资源清理</h4>
+                    <p><strong>作用：</strong> 清理WandB会话和其他资源</p>
+                    <pre><code># 在main()函数结束时
+finally:
+    # 结束WandB会话（如果启用）
+    if self.use_wandb:
+        finish_wandb()
+    
+    # 清理其他资源
+    torch.cuda.empty_cache()  # 清理GPU缓存</code></pre>
+                </div>
+            </div>
+        </div>
+
+        <div class="content-section">
+            <h2>🔍 关键数据流</h2>
+            <p>理解数据在各个模块间的流动方式。</p>
+
+            <h3>模型参数流动</h3>
+            <div class="architecture-content">
+                <div class="architecture-diagram">
+                    <div class="arch-layer">
+                        <h4>服务器 → 客户端</h4>
+                        <div class="arch-components">
+                            <span>server.send_global_model()</span>
+                            <span>Dict[str, Tensor]</span>
+                        </div>
+                    </div>
+                    <div class="arch-layer">
+                        <h4>客户端本地训练</h4>
+                        <div class="arch-components">
+                            <span>client.train()</span>
+                            <span>本地参数更新</span>
+                        </div>
+                    </div>
+                    <div class="arch-layer">
+                        <h4>客户端 → 服务器</h4>
+                        <div class="arch-components">
+                            <span>{'parameters': ..., 'metrics': ...}</span>
+                            <span>训练结果</span>
+                        </div>
+                    </div>
+                    <div class="arch-layer">
+                        <h4>服务器聚合</h4>
+                        <div class="arch-components">
+                            <span>aggregator.aggregate()</span>
+                            <span>新的全局参数</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="architecture-description">
+                    <h4>数据流特点</h4>
+                    <ul>
+                        <li><strong>参数共享：</strong> 只传递模型参数，不传递原始数据</li>
+                        <li><strong>深拷贝保护：</strong> 避免参数引用冲突</li>
+                        <li><strong>设备管理：</strong> 自动处理CPU/GPU转换</li>
+                        <li><strong>格式统一：</strong> 标准化的参数字典格式</li>
+                    </ul>
+                </div>
+            </div>
+
+            <h3>配置信息传递</h3>
+            <pre><code># 配置从main.py流向各个组件
+main.py
+├── ConfigManager.load_config() → config dict
+├── ExperimentRunner(config)
+│   ├── ModelFactory.create_model(config['model'])
+│   ├── setup_data() 使用 config['data']
+│   ├── setup_clients() 使用 config['client']
+│   └── run_experiment() 使用 config['experiment']</code></pre>
+        </div>
+
+        <div class="content-section">
+            <h2>⏱️ 性能监控点</h2>
+            <p>在运行流程中的关键性能监控点。</p>
+
+            <table class="property-table">
+                <tr>
+                    <th>阶段</th>
+                    <th>监控指标</th>
+                    <th>输出位置</th>
+                </tr>
+                <tr>
+                    <td>数据加载</td>
+                    <td>数据集大小、分区情况</td>
+                    <td>控制台输出</td>
+                </tr>
+                <tr>
+                    <td>客户端训练</td>
+                    <td>训练损失、进度条</td>
+                    <td>tqdm进度条</td>
+                </tr>
+                <tr>
+                    <td>服务器聚合</td>
+                    <td>聚合参数数量</td>
+                    <td>内部日志</td>
+                </tr>
+                <tr>
+                    <td>模型评估</td>
+                    <td>准确率、损失值</td>
+                    <td>控制台 + WandB</td>
+                </tr>
+                <tr>
+                    <td>整体实验</td>
+                    <td>执行时间、最终性能</td>
+                    <td>结果摘要</td>
+                </tr>
+            </table>
+        </div>
+
+        <div class="content-section">
+            <h2>🚨 异常处理流程</h2>
+            <p>各个阶段的异常处理机制。</p>
+
+            <ul>
+                <li><strong>配置验证：</strong> ConfigManager 在加载时验证配置完整性</li>
+                <li><strong>设备检测：</strong> DeviceManager 自动降级到可用设备</li>
+                <li><strong>数据加载：</strong> 自动下载缺失的数据集</li>
+                <li><strong>训练异常：</strong> 捕获并记录训练错误，继续执行</li>
+                <li><strong>评估失败：</strong> 返回空指标字典，不中断训练</li>
+                <li><strong>资源清理：</strong> 使用 finally 块确保资源释放</li>
+            </ul>
+        </div>
+
+        <div class="content-section" id="flow-diagram">
+            <h2>🎯 总结</h2>
+            <p>联邦学习框架的完整运行流程体现了以下设计原则：</p>
+
+            <div class="warning-box">
+                <strong>模块化：</strong> 每个阶段都有明确的职责和接口，便于维护和扩展。
+            </div>
+
+            <div class="info-box">
+                <strong>可配置：</strong> 通过YAML配置文件灵活控制实验参数，支持命令行覆盖。
+            </div>
+
+            <div class="warning-box">
+                <strong>容错性：</strong> 各个关键环节都有异常处理机制，确保实验的稳定性。
+            </div>
+
+            <div class="info-box">
+                <strong>可观测：</strong> 提供详细的日志输出和性能监控，便于调试和分析。
+            </div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <div class="footer-content">
+            <p>&copy; 2025 联邦学习框架. 所有权利保留.</p>
+            <p>
+                <a href="index.html">返回首页</a> | 
+                <a href="core.html">Core 模块</a> | 
+                <a href="communication.html">Communication 模块</a> | 
+                <a href="aggregation.html">Aggregation 模块</a> | 
+                <a href="data.html">Data 模块</a> | 
+                <a href="models.html">Models 模块</a> | 
+                <a href="utils.html">Utils 模块</a> |
+                <a href="#overview">回到顶部 ↑</a>
+            </p>
+        </div>
+    </footer>
+
+    <script src="assets/script.js"></script>
+</body>
+</html>

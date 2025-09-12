@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Models 模型模块 - 联邦学习框架文档</title>
+    <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-logo">
+                <h2>🚀 联邦学习框架</h2>
+            </div>
+            <ul class="nav-menu">
+                <li><a href="index.html" class="nav-link">首页</a></li>
+                <li><a href="core.html" class="nav-link">Core</a></li>
+                <li><a href="communication.html" class="nav-link">Communication</a></li>
+                <li><a href="aggregation.html" class="nav-link">Aggregation</a></li>
+                <li><a href="data.html" class="nav-link">Data</a></li>
+                <li><a href="utils.html" class="nav-link">Utils</a></li>
+                <li><a href="execution-flow.html" class="nav-link">执行流程</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <div class="container">
+        <a href="index.html" class="back-button">← 返回首页</a>
+        
+        <header class="hero">
+            <h1>🧠 Models 模型模块</h1>
+            <p class="hero-subtitle">深度学习模型的实现和联邦学习适配</p>
+        </header>
+
+        <div class="content-section">
+            <h2>模块概述</h2>
+            <p>Models 模块包含了联邦学习框架支持的各种深度学习模型实现。所有模型都继承自BaseModel基类，确保统一的接口和联邦学习兼容性。目前支持CNN和CLIP等模型，为不同的联邦学习场景提供了灵活的模型选择。</p>
+            
+            <div class="info-box">
+                <strong>设计特点：</strong> 统一的模型接口、自动设备管理、优化器集成、参数序列化支持。
+            </div>
+        </div>
+
+        <div class="content-section">
+            <h2>📁 文件结构</h2>
+            <pre><code>models/
+├── __init__.py          # 模块初始化
+├── base.py             # 基础模型类（已迁移到core/base.py）
+├── cnn.py              # CNN 卷积神经网络模型
+└── clip.py             # CLIP 多模态模型</code></pre>
+        </div>
+
+        <div class="content-section">
+            <h2>🔧 BaseModel 基础模型类</h2>
+            <p>定义在 core/base.py 中，所有模型必须继承的抽象基类。提供统一的模型接口和基础功能。</p>
+            
+            <h3>核心特性</h3>
+            <ul>
+                <li><strong>优化器管理：</strong> 自动创建和配置AdamW优化器</li>
+                <li><strong>设备兼容：</strong> 自动处理CPU/GPU设备切换</li>
+                <li><strong>参数序列化：</strong> 支持模型参数的获取和设置</li>
+                <li><strong>训练接口：</strong> 统一的训练和评估方法</li>
+            </ul>
+
+            <h3>必须实现的抽象方法</h3>
+            <ul class="method-list">
+                <li>
+                    <div class="method-signature">get_parameters() -> Dict[str, Any]</div>
+                    <div class="method-description">获取模型参数字典，用于联邦学习参数传输</div>
+                </li>
+                <li>
+                    <div class="method-signature">set_parameters(params: Dict[str, Any])</div>
+                    <div class="method-description">设置模型参数，用于接收全局模型参数</div>
+                </li>
+                <li>
+                    <div class="method-signature">train_step(data, labels)</div>
+                    <div class="method-description">执行单步训练，返回损失值</div>
+                </li>
+                <li>
+                    <div class="method-signature">evaluate(data, labels)</div>
+                    <div class="method-description">评估模型性能，返回指标字典</div>
+                </li>
+            </ul>
+        </div>
+
+        <div class="content-section">
+            <h2>🖼️ CNNModel 卷积神经网络</h2>
+            <p>经典的CNN模型实现，适配224×224 RGB图像输入，基于联邦学习经典架构设计。</p>
+            
+            <h3>模型架构</h3>
+            <div class="architecture-content">
+                <div class="architecture-diagram">
+                    <div class="arch-layer">
+                        <h4>输入层</h4>
+                        <div class="arch-components">
+                            <span>3×224×224</span>
+                            <span>RGB图像</span>
+                        </div>
+                    </div>
+                    <div class="arch-layer">
+                        <h4>卷积层1</h4>
+                        <div class="arch-components">
+                            <span>5×5, 32通道</span>
+                            <span>ReLU + MaxPool</span>
+                            <span>→ 32×110×110</span>
+                        </div>
+                    </div>
+                    <div class="arch-layer">
+                        <h4>卷积层2</h4>
+                        <div class="arch-components">
+                            <span>5×5, 64通道</span>
+                            <span>ReLU + MaxPool</span>
+                            <span>→ 64×53×53</span>
+                        </div>
+                    </div>
+                    <div class="arch-layer">
+                        <h4>卷积层3</h4>
+                        <div class="arch-components">
+                            <span>5×5, 128通道</span>
+                            <span>ReLU + MaxPool</span>
+                            <span>→ 128×24×24</span>
+                        </div>
+                    </div>
+                    <div class="arch-layer">
+                        <h4>卷积层4</h4>
+                        <div class="arch-components">
+                            <span>5×5, 256通道</span>
+                            <span>ReLU + MaxPool</span>
+                            <span>→ 256×10×10</span>
+                        </div>
+                    </div>
+                    <div class="arch-layer">
+                        <h4>全连接层</h4>
+                        <div class="arch-components">
+                            <span>512单元 ReLU</span>
+                            <span>10单元输出</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="architecture-description">
+                    <h4>架构特点</h4>
+                    <ul>
+                        <li><strong>深度特征提取：</strong> 4层卷积逐步提取特征</li>
+                        <li><strong>池化降维：</strong> MaxPool2D减少空间维度</li>
+                        <li><strong>非线性激活：</strong> ReLU激活函数</li>
+                        <li><strong>分类输出：</strong> 最终输出10类概率</li>
+                    </ul>
+                </div>
+            </div>
+
+            <h3>核心方法</h3>
+            <ul class="method-list">
+                <li>
+                    <div class="method-signature">__init__(optimizer_config: Dict[str, Any] = None)</div>
+                    <div class="method-description">初始化CNN模型，创建网络结构和优化器</div>
+                </li>
+                <li>
+                    <div class="method-signature">forward(x: torch.Tensor) -> torch.Tensor</div>
+                    <div class="method-description">前向传播，输入图像返回分类logits</div>
+                </li>
+                <li>
+                    <div class="method-signature">get_parameters() -> Dict[str, torch.Tensor]</div>
+                    <div class="method-description">获取模型所有可训练参数</div>
+                </li>
+                <li>
+                    <div class="method-signature">set_parameters(params: Dict[str, torch.Tensor])</div>
+                    <div class="method-description">设置模型参数，用于联邦学习参数更新</div>
+                </li>
+                <li>
+                    <div class="method-signature">train_step(data: torch.Tensor, labels: torch.Tensor) -> float</div>
+                    <div class="method-description">执行单步训练，返回损失值</div>
+                </li>
+                <li>
+                    <div class="method-signature">evaluate(data: torch.Tensor, labels: torch.Tensor) -> Dict[str, float]</div>
+                    <div class="method-description">评估模型，返回损失和准确率</div>
+                </li>
+            </ul>
+
+            <h3>模型规格</h3>
+            <table class="property-table">
+                <tr>
+                    <th>属性</th>
+                    <th>值</th>
+                </tr>
+                <tr>
+                    <td>输入尺寸</td>
+                    <td>3 × 224 × 224</td>
+                </tr>
+                <tr>
+                    <td>参数数量</td>
+                    <td>约 6.8M</td>
+                </tr>
+                <tr>
+                    <td>输出类别</td>
+                    <td>10</td>
+                </tr>
+                <tr>
+                    <td>损失函数</td>
+                    <td>CrossEntropyLoss</td>
+                </tr>
+                <tr>
+                    <td>优化器</td>
+                    <td>AdamW</td>
+                </tr>
+                <tr>
+                    <td>设备支持</td>
+                    <td>CPU / CUDA</td>
+                </tr>
+            </table>
+        </div>
+
+        <div class="content-section">
+            <h2>🎯 CLIP 多模态模型</h2>
+            <p>基于Hugging Face transformers的CLIP模型实现，支持图像和文本的多模态联邦学习。</p>
+            
+            <h3>CLIP架构特点</h3>
+            <div class="architecture-content">
+                <div class="architecture-diagram">
+                    <div class="arch-layer">
+                        <h4>图像编码器</h4>
+                        <div class="arch-components">
+                            <span>Vision Transformer</span>
+                            <span>ResNet-50</span>
+                        </div>
+                    </div>
+                    <div class="arch-layer">
+                        <h4>文本编码器</h4>
+                        <div class="arch-components">
+                            <span>Transformer</span>
+                            <span>文本嵌入</span>
+                        </div>
+                    </div>
+                    <div class="arch-layer">
+                        <h4>投影层</h4>
+                        <div class="arch-components">
+                            <span>图像投影</span>
+                            <span>文本投影</span>
+                        </div>
+                    </div>
+                    <div class="arch-layer">
+                        <h4>对比学习</h4>
+                        <div class="arch-components">
+                            <span>相似度计算</span>
+                            <span>InfoNCE损失</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="architecture-description">
+                    <h4>多模态特性</h4>
+                    <ul>
+                        <li><strong>零样本分类：</strong> 无需训练即可分类新类别</li>
+                        <li><strong>图文理解：</strong> 同时处理图像和文本</li>
+                        <li><strong>跨模态检索：</strong> 图像-文本相互检索</li>
+                        <li><strong>知识蒸馏：</strong> 预训练知识迁移</li>
+                    </ul>
+                </div>
+            </div>
+
+            <h3>预训练模型支持</h3>
+            <table class="property-table">
+                <tr>
+                    <th>模型名称</th>
+                    <th>图像编码器</th>
+                    <th>参数量</th>
+                    <th>用途</th>
+                </tr>
+                <tr>
+                    <td>openai/clip-vit-base-patch32</td>
+                    <td>ViT-B/32</td>
+                    <td>151M</td>
+                    <td>快速实验</td>
+                </tr>
+                <tr>
+                    <td>openai/clip-vit-base-patch16</td>
+                    <td>ViT-B/16</td>
+                    <td>149M</td>
+                    <td>高精度</td>
+                </tr>
+                <tr>
+                    <td>openai/clip-vit-large-patch14</td>
+                    <td>ViT-L/14</td>
+                    <td>428M</td>
+                    <td>最佳性能</td>
+                </tr>
+            </table>
+
+            <h3>核心方法</h3>
+            <ul class="method-list">
+                <li>
+                    <div class="method-signature">__init__(optimizer_config: Dict[str, Any] = None)</div>
+                    <div class="method-description">初始化CLIP模型，加载预训练权重</div>
+                </li>
+                <li>
+                    <div class="method-signature">get_image_features(images: torch.Tensor) -> torch.Tensor</div>
+                    <div class="method-description">提取图像特征向量</div>
+                </li>
+                <li>
+                    <div class="method-signature">get_text_features(text_inputs: Dict) -> torch.Tensor</div>
+                    <div class="method-description">提取文本特征向量</div>
+                </li>
+                <li>
+                    <div class="method-signature">zero_shot_classify(images: torch.Tensor, class_names: List[str]) -> torch.Tensor</div>
+                    <div class="method-description">零样本图像分类</div>
+                </li>
+                <li>
+                    <div class="method-signature">contrastive_loss(image_features: torch.Tensor, text_features: torch.Tensor) -> torch.Tensor</div>
+                    <div class="method-description">计算对比学习损失</div>
+                </li>
+            </ul>
+        </div>
+
+        <div class="content-section">
+            <h2>💡 使用示例</h2>
+            
+            <h3>CNN模型基础使用</h3>
+            <pre><code># 创建CNN模型
+from models.cnn import CNNModel
+
+# 使用默认优化器配置
+model = CNNModel()
+
+# 使用自定义优化器配置
+optimizer_config = {
+    'type': 'AdamW',
+    'lr': 0.001,
+    'weight_decay': 0.01
+}
+model = CNNModel(optimizer_config)
+
+# 训练示例
+model.train()
+for batch_data, batch_labels in dataloader:
+    loss = model.train_step(batch_data, batch_labels)
+    print(f"训练损失: {loss:.4f}")
+
+# 评估示例
+model.eval()
+metrics = model.evaluate(test_data, test_labels)
+print(f"测试准确率: {metrics['accuracy']:.4f}")
+print(f"测试损失: {metrics['loss']:.4f}")</code></pre>
+
+            <h3>CLIP模型零样本分类</h3>
+            <pre><code># 创建CLIP模型
+from models.clip import CLIPModel
+
+model = CLIPModel()
+
+# 定义类别标签
+class_names = ["cat", "dog", "bird", "car", "airplane"]
+
+# 零样本分类
+with torch.no_grad():
+    predictions = model.zero_shot_classify(images, class_names)
+    predicted_classes = predictions.argmax(dim=1)
+    
+    for i, pred_idx in enumerate(predicted_classes):
+        print(f"图像 {i}: {class_names[pred_idx]}")
+
+# 获取图像和文本特征
+image_features = model.get_image_features(images)
+text_features = model.get_text_features(text_inputs)
+
+# 计算相似度
+similarity = torch.cosine_similarity(image_features, text_features)
+print(f"图文相似度: {similarity.mean().item():.4f}")</code></pre>
+
+            <h3>联邦学习中的模型使用</h3>
+            <pre><code># 在客户端中使用
+class FederatedClient(BaseClient):
+    def __init__(self, client_id, model_type="cnn", **kwargs):
+        super().__init__(client_id)
+        
+        # 根据类型创建模型
+        if model_type == "cnn":
+            self.model = CNNModel(kwargs.get('optimizer_config'))
+        elif model_type == "clip":
+            self.model = CLIPModel(kwargs.get('optimizer_config'))
+        else:
+            raise ValueError(f"不支持的模型类型: {model_type}")
+    
+    def train(self, global_model_params):
+        # 设置全局模型参数
+        if global_model_params:
+            self.model.set_parameters(global_model_params)
+        
+        # 本地训练
+        total_loss = 0.0
+        for batch_data, batch_labels in self.data_loader:
+            loss = self.model.train_step(batch_data, batch_labels)
+            total_loss += loss
+        
+        # 返回更新后的参数
+        return {
+            'parameters': self.model.get_parameters(),
+            'metrics': {'loss': total_loss / len(self.data_loader)}
+        }</code></pre>
+
+            <h3>模型参数管理</h3>
+            <pre><code># 保存模型参数
+def save_model_parameters(model, filepath):
+    """保存模型参数到文件"""
+    params = model.get_parameters()
+    torch.save(params, filepath)
+    print(f"模型参数已保存到: {filepath}")
+
+# 加载模型参数
+def load_model_parameters(model, filepath):
+    """从文件加载模型参数"""
+    params = torch.load(filepath)
+    model.set_parameters(params)
+    print(f"模型参数已从 {filepath} 加载")
+
+# 参数统计
+def analyze_model_parameters(model):
+    """分析模型参数统计"""
+    params = model.get_parameters()
+    
+    total_params = 0
+    for name, param in params.items():
+        param_count = param.numel()
+        total_params += param_count
+        print(f"{name}: {param.shape} ({param_count:,} 参数)")
+    
+    print(f"总参数数量: {total_params:,}")
+    return total_params
+
+# 使用示例
+model = CNNModel()
+save_model_parameters(model, "model_checkpoint.pth")
+param_count = analyze_model_parameters(model)</code></pre>
+        </div>
+
+        <div class="content-section">
+            <h2>🔧 扩展自定义模型</h2>
+            
+            <h3>创建自定义模型类</h3>
+            <pre><code># models/resnet.py
+import torch
+import torch.nn as nn
+import torchvision.models as models
+from core.base import BaseModel
+
+class ResNetModel(BaseModel):
+    """ResNet模型实现"""
+    
+    def __init__(self, num_classes=10, pretrained=True, optimizer_config=None):
+        super().__init__(optimizer_config)
+        
+        # 使用预训练ResNet-18
+        self.model = models.resnet18(pretrained=pretrained)
+        
+        # 修改最后一层以适应类别数
+        self.model.fc = nn.Linear(self.model.fc.in_features, num_classes)
+        
+        # 创建损失函数
+        self.criterion = nn.CrossEntropyLoss()
+        
+        # 创建优化器
+        self.create_optimizer(self.model.parameters())
+    
+    def forward(self, x):
+        return self.model(x)
+    
+    def get_parameters(self):
+        """获取模型参数"""
+        return {name: param.clone().detach() 
+                for name, param in self.model.named_parameters()}
+    
+    def set_parameters(self, params):
+        """设置模型参数"""
+        with torch.no_grad():
+            for name, param in self.model.named_parameters():
+                if name in params:
+                    param.copy_(params[name])
+    
+    def train_step(self, data, labels):
+        """单步训练"""
+        self.model.train()
+        
+        # 确保数据在正确设备上
+        data, labels = self._ensure_device_compatibility(data, labels)
+        
+        # 前向传播
+        outputs = self.model(data)
+        loss = self.criterion(outputs, labels)
+        
+        # 反向传播
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
+        
+        return loss.item()
+    
+    def evaluate(self, data, labels):
+        """评估模型"""
+        self.model.eval()
+        
+        with torch.no_grad():
+            data, labels = self._ensure_device_compatibility(data, labels)
+            
+            outputs = self.model(data)
+            loss = self.criterion(outputs, labels)
+            
+            # 计算准确率
+            _, predicted = torch.max(outputs.data, 1)
+            accuracy = (predicted == labels).float().mean()
+            
+            return {
+                'loss': loss.item(),
+                'accuracy': accuracy.item()
+            }</code></pre>
+
+            <h3>注册到模型工厂</h3>
+            <pre><code># utils/model_factory.py 中添加
+from models.resnet import ResNetModel
+
+class ModelFactory:
+    @staticmethod
+    def create_model(model_config, optimizer_config=None):
+        model_type = model_config.get('type', 'cnn')
+        
+        if model_type == 'cnn':
+            return CNNModel(optimizer_config)
+        elif model_type == 'clip':
+            return CLIPModel(optimizer_config)
+        elif model_type == 'resnet':  # 新增
+            num_classes = model_config.get('num_classes', 10)
+            pretrained = model_config.get('pretrained', True)
+            return ResNetModel(num_classes, pretrained, optimizer_config)
+        else:
+            raise ValueError(f"不支持的模型类型: {model_type}")</code></pre>
+
+            <h3>配置文件中使用新模型</h3>
+            <pre><code># configs/resnet_experiment.yaml
+model:
+  type: "resnet"
+  num_classes: 10
+  pretrained: true
+  learning_rate: 0.001</code></pre>
+        </div>
+
+        <div class="content-section">
+            <h2>⚡ 性能优化</h2>
+            
+            <h3>模型优化策略</h3>
+            <ul>
+                <li><strong>混合精度训练：</strong> 使用AMP减少内存使用和提高速度</li>
+                <li><strong>梯度累积：</strong> 模拟大批量训练效果</li>
+                <li><strong>模型剪枝：</strong> 减少模型参数数量</li>
+                <li><strong>知识蒸馏：</strong> 大模型向小模型传递知识</li>
+            </ul>
+
+            <h3>混合精度训练示例</h3>
+            <pre><code>from torch.cuda.amp import autocast, GradScaler
+
+class OptimizedCNNModel(CNNModel):
+    """支持混合精度的CNN模型"""
+    
+    def __init__(self, optimizer_config=None, use_amp=True):
+        super().__init__(optimizer_config)
+        self.use_amp = use_amp and torch.cuda.is_available()
+        self.scaler = GradScaler() if self.use_amp else None
+    
+    def train_step(self, data, labels):
+        """支持混合精度的训练步骤"""
+        self.model.train()
+        data, labels = self._ensure_device_compatibility(data, labels)
+        
+        self.optimizer.zero_grad()
+        
+        if self.use_amp:
+            # 混合精度训练
+            with autocast():
+                outputs = self.model(data)
+                loss = self.criterion(outputs, labels)
+            
+            self.scaler.scale(loss).backward()
+            self.scaler.step(self.optimizer)
+            self.scaler.update()
+        else:
+            # 常规训练
+            outputs = self.model(data)
+            loss = self.criterion(outputs, labels)
+            loss.backward()
+            self.optimizer.step()
+        
+        return loss.item()</code></pre>
+        </div>
+
+        <div class="content-section">
+            <h2>⚠️ 注意事项</h2>
+            <div class="warning-box">
+                <strong>设备一致性：</strong> 确保模型和数据在相同设备上，避免设备不匹配错误。
+            </div>
+            
+            <div class="warning-box">
+                <strong>内存管理：</strong> 大模型可能导致显存不足，合理设置批大小和使用梯度检查点。
+            </div>
+            
+            <div class="info-box">
+                <strong>参数同步：</strong> 联邦学习中确保所有客户端使用相同的模型架构和参数格式。
+            </div>
+            
+            <div class="warning-box">
+                <strong>预训练模型：</strong> CLIP等预训练模型首次加载需要下载权重文件，确保网络连接。
+            </div>
+        </div>
+
+        <div class="content-section">
+            <h2>📈 模型评估指标</h2>
+            <ul>
+                <li><strong>准确率（Accuracy）：</strong> 分类正确的样本比例</li>
+                <li><strong>损失值（Loss）：</strong> 模型预测与真实标签的差距</li>
+                <li><strong>收敛速度：</strong> 达到目标性能所需的训练轮数</li>
+                <li><strong>通信效率：</strong> 联邦学习中的参数传输开销</li>
+                <li><strong>鲁棒性：</strong> 对数据分布变化的适应能力</li>
+            </ul>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <div class="footer-content">
+            <p>&copy; 2025 联邦学习框架. 所有权利保留.</p>
+            <p><a href="data.html">上一页：Data 模块</a> | <a href="utils.html">下一页：Utils 模块</a></p>
+        </div>
+    </footer>
+
+    <script src="assets/script.js"></script>
+</body>
+</html>

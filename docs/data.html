@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Data 数据模块 - 联邦学习框架文档</title>
+    <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-logo">
+                <h2>🚀 联邦学习框架</h2>
+            </div>
+            <ul class="nav-menu">
+                <li><a href="index.html" class="nav-link">首页</a></li>
+                <li><a href="core.html" class="nav-link">Core</a></li>
+                <li><a href="communication.html" class="nav-link">Communication</a></li>
+                <li><a href="aggregation.html" class="nav-link">Aggregation</a></li>
+                <li><a href="models.html" class="nav-link">Models</a></li>
+                <li><a href="utils.html" class="nav-link">Utils</a></li>
+                <li><a href="execution-flow.html" class="nav-link">执行流程</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <div class="container">
+        <a href="index.html" class="back-button">← 返回首页</a>
+        
+        <header class="hero">
+            <h1>📊 Data 数据模块</h1>
+            <p class="hero-subtitle">联邦学习数据加载、分区和预处理的统一接口</p>
+        </header>
+
+        <div class="content-section">
+            <h2>模块概述</h2>
+            <p>Data 模块是联邦学习框架的数据处理核心，负责数据集的加载、客户端数据分区、预处理和DataLoader创建。该模块支持多种数据集，并提供灵活的数据分布策略，满足不同的联邦学习实验需求。</p>
+            
+            <div class="info-box">
+                <strong>设计原则：</strong> 数据集类专注于数据加载和预处理，DataLoader 创建统一管理，支持联邦学习的数据分区需求。
+            </div>
+        </div>
+
+        <div class="content-section">
+            <h2>📁 文件结构</h2>
+            <pre><code>data/
+├── __init__.py          # 模块初始化
+├── data_loader.py       # 数据加载核心接口
+├── middleware.py        # 数据中间件和统一接口
+└── datasets/            # 数据集实现目录
+    ├── __init__.py
+    ├── mnist.py         # MNIST 数据集
+    └── cifar10.py       # CIFAR-10 数据集</code></pre>
+        </div>
+
+        <div class="content-section">
+            <h2>🔧 data_loader.py 核心接口</h2>
+            <p>提供联邦学习客户端数据加载器创建的主要功能，抽象了数据分区、子集创建和DataLoader实例化的复杂性。</p>
+            
+            <h3>支持的数据集</h3>
+            <table class="property-table">
+                <tr>
+                    <th>数据集名称</th>
+                    <th>类名</th>
+                    <th>描述</th>
+                </tr>
+                <tr>
+                    <td>mnist</td>
+                    <td>MNIST</td>
+                    <td>手写数字识别数据集（28x28灰度图像）</td>
+                </tr>
+                <tr>
+                    <td>cifar10</td>
+                    <td>CIFAR10</td>
+                    <td>物体分类数据集（32x32彩色图像）</td>
+                </tr>
+            </table>
+
+            <h3>核心函数</h3>
+            <ul class="method-list">
+                <li>
+                    <div class="method-signature">get_client_dataloaders(dataset_configs: List[Dict], client_id: int = 0, total_clients: int = 1, batch_size: int = 32) -> Dict[str, DataLoader]</div>
+                    <div class="method-description">为指定客户端创建数据加载器字典，支持多数据集配置</div>
+                </li>
+                <li>
+                    <div class="method-signature">_validate_dataset_name(dataset_name: str) -> str</div>
+                    <div class="method-description">验证数据集名称是否受支持，返回标准化名称</div>
+                </li>
+                <li>
+                    <div class="method-signature">_calculate_client_data_range(client_id: int, total_clients: int, total_items: int) -> Tuple[int, int]</div>
+                    <div class="method-description">计算指定客户端的数据索引范围，实现数据分区</div>
+                </li>
+                <li>
+                    <div class="method-signature">_create_dataset_subset(dataset: Dataset, start_idx: int, end_idx: int) -> Subset</div>
+                    <div class="method-description">从完整数据集创建客户端专用的数据子集</div>
+                </li>
+            </ul>
+        </div>
+
+        <div class="content-section">
+            <h2>📈 数据分区策略</h2>
+            <div class="architecture-content">
+                <div class="architecture-diagram">
+                    <div class="arch-layer">
+                        <h4>1. 数据集加载</h4>
+                        <div class="arch-components">
+                            <span>完整数据集</span>
+                            <span>预处理</span>
+                        </div>
+                    </div>
+                    <div class="arch-layer">
+                        <h4>2. 客户端分区</h4>
+                        <div class="arch-components">
+                            <span>均匀分割</span>
+                            <span>索引计算</span>
+                        </div>
+                    </div>
+                    <div class="arch-layer">
+                        <h4>3. 子集创建</h4>
+                        <div class="arch-components">
+                            <span>Subset 包装</span>
+                            <span>数据隔离</span>
+                        </div>
+                    </div>
+                    <div class="arch-layer">
+                        <h4>4. DataLoader 创建</h4>
+                        <div class="arch-components">
+                            <span>批处理</span>
+                            <span>随机化</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="architecture-description">
+                    <h4>分区特点</h4>
+                    <ul>
+                        <li><strong>均匀分割</strong>：数据在客户端间均匀分布</li>
+                        <li><strong>无重叠</strong>：每个样本只属于一个客户端</li>
+                        <li><strong>确定性</strong>：相同参数产生相同的分区结果</li>
+                        <li><strong>可扩展</strong>：支持任意数量的客户端</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="content-section">
+            <h2>🎯 MNIST 数据集</h2>
+            <p>手写数字识别数据集，包含0-9的数字图像，是联邦学习实验的经典数据集。</p>
+            
+            <h3>类定义</h3>
+            <ul class="method-list">
+                <li>
+                    <div class="method-signature">__init__(data_root: str, train: bool = True, preprocess=None)</div>
+                    <div class="method-description">初始化MNIST数据集，支持自定义预处理</div>
+                </li>
+                <li>
+                    <div class="method-signature">__len__() -> int</div>
+                    <div class="method-description">返回数据集大小</div>
+                </li>
+                <li>
+                    <div class="method-signature">__getitem__(idx) -> Tuple[Tensor, int]</div>
+                    <div class="method-description">获取指定索引的数据样本和标签</div>
+                </li>
+            </ul>
+
+            <h3>数据特征</h3>
+            <table class="property-table">
+                <tr>
+                    <th>属性</th>
+                    <th>值</th>
+                </tr>
+                <tr>
+                    <td>图像尺寸</td>
+                    <td>28 × 28 像素</td>
+                </tr>
+                <tr>
+                    <td>通道数</td>
+                    <td>1 (灰度图)</td>
+                </tr>
+                <tr>
+                    <td>类别数</td>
+                    <td>10 (数字 0-9)</td>
+                </tr>
+                <tr>
+                    <td>训练样本</td>
+                    <td>60,000</td>
+                </tr>
+                <tr>
+                    <td>测试样本</td>
+                    <td>10,000</td>
+                </tr>
+                <tr>
+                    <td>预处理</td>
+                    <td>ToTensor + Normalize(0.1307, 0.3081)</td>
+                </tr>
+            </table>
+        </div>
+
+        <div class="content-section">
+            <h2>🖼️ CIFAR-10 数据集</h2>
+            <p>物体分类数据集，包含10个类别的彩色图像，提供更具挑战性的联邦学习场景。</p>
+            
+            <h3>数据特征</h3>
+            <table class="property-table">
+                <tr>
+                    <th>属性</th>
+                    <th>值</th>
+                </tr>
+                <tr>
+                    <td>图像尺寸</td>
+                    <td>32 × 32 像素</td>
+                </tr>
+                <tr>
+                    <td>通道数</td>
+                    <td>3 (RGB彩色)</td>
+                </tr>
+                <tr>
+                    <td>类别数</td>
+                    <td>10 (飞机、汽车、鸟类等)</td>
+                </tr>
+                <tr>
+                    <td>训练样本</td>
+                    <td>50,000</td>
+                </tr>
+                <tr>
+                    <td>测试样本</td>
+                    <td>10,000</td>
+                </tr>
+                <tr>
+                    <td>类别标签</td>
+                    <td>airplane, automobile, bird, cat, deer, dog, frog, horse, ship, truck</td>
+                </tr>
+            </table>
+        </div>
+
+        <div class="content-section">
+            <h2>🔧 middleware.py 数据中间件</h2>
+            <p>提供数据处理的中间件功能，包括多数据集合并、统一数据加载器创建等高级功能。</p>
+            
+            <h3>核心函数</h3>
+            <ul class="method-list">
+                <li>
+                    <div class="method-signature">create_unified_dataloader(dataset_configs: List[Dict], batch_size: int = 32) -> DataLoader</div>
+                    <div class="method-description">创建统一的数据加载器，支持多数据集合并</div>
+                </li>
+            </ul>
+
+            <div class="info-box">
+                <strong>多数据集支持：</strong> 允许客户端使用多个不同的数据集进行训练，实现异构数据分布的联邦学习。
+            </div>
+        </div>
+
+        <div class="content-section">
+            <h2>💡 使用示例</h2>
+            
+            <h3>基础客户端数据加载</h3>
+            <pre><code># 配置单个数据集
+dataset_configs = [{
+    'name': 'mnist',
+    'data_root': './data',
+    'train': True
+}]
+
+# 为客户端0创建数据加载器（总共5个客户端）
+client_dataloaders = get_client_dataloaders(
+    dataset_configs=dataset_configs,
+    client_id=0,
+    total_clients=5,
+    batch_size=64
+)
+
+# 获取MNIST数据加载器
+mnist_loader = client_dataloaders['mnist']
+print(f"客户端0的MNIST数据量: {len(mnist_loader.dataset)}")
+
+# 训练数据迭代
+for batch_data, batch_labels in mnist_loader:
+    print(f"批次形状: {batch_data.shape}, 标签形状: {batch_labels.shape}")
+    break</code></pre>
+
+            <h3>多数据集客户端配置</h3>
+            <pre><code># 配置多个数据集
+dataset_configs = [
+    {
+        'name': 'mnist',
+        'data_root': './data',
+        'train': True
+    },
+    {
+        'name': 'cifar10',
+        'data_root': './data',
+        'train': True
+    }
+]
+
+# 创建多数据集客户端
+client_dataloaders = get_client_dataloaders(
+    dataset_configs=dataset_configs,
+    client_id=2,
+    total_clients=10,
+    batch_size=32
+)
+
+# 访问不同数据集
+mnist_loader = client_dataloaders['mnist']
+cifar10_loader = client_dataloaders['cifar10']
+
+print(f"MNIST 数据量: {len(mnist_loader.dataset)}")
+print(f"CIFAR-10 数据量: {len(cifar10_loader.dataset)}")</code></pre>
+
+            <h3>完整的客户端数据设置</h3>
+            <pre><code>def setup_client_data(config, client_id, total_clients):
+    """为客户端设置数据加载器"""
+    data_config = config['data']
+    client_config = config['client']
+    
+    # 获取客户端数据集配置
+    client_key = f"client_{client_id}"
+    client_dataset_names = client_config['client_datasets'][client_key]
+    
+    # 构建数据集配置列表
+    dataset_configs = []
+    for dataset_name in client_dataset_names:
+        dataset_config = {
+            'name': dataset_name,
+            'data_root': data_config.get('data_dir', './data'),
+            'train': True,
+            **data_config['datasets'][dataset_name]
+        }
+        dataset_configs.append(dataset_config)
+    
+    # 创建数据加载器
+    client_dataloaders = get_client_dataloaders(
+        dataset_configs=dataset_configs,
+        client_id=client_id,
+        total_clients=total_clients,
+        batch_size=data_config['batch_size']
+    )
+    
+    return client_dataloaders
+
+# 使用示例
+config = load_config('configs/multi_dataset.yaml')
+client_dataloaders = setup_client_data(config, client_id=0, total_clients=4)</code></pre>
+
+            <h3>自定义数据预处理</h3>
+            <pre><code>from torchvision import transforms
+
+# 自定义预处理管道
+custom_transform = transforms.Compose([
+    transforms.ToTensor(),
+    transforms.RandomHorizontalFlip(p=0.5),
+    transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+])
+
+# 创建带自定义预处理的数据集
+dataset_configs = [{
+    'name': 'cifar10',
+    'data_root': './data',
+    'train': True,
+    'preprocess': custom_transform
+}]
+
+client_dataloaders = get_client_dataloaders(dataset_configs, batch_size=128)</code></pre>
+        </div>
+
+        <div class="content-section">
+            <h2>🔧 扩展新数据集</h2>
+            
+            <h3>创建自定义数据集类</h3>
+            <pre><code># 在 data/datasets/ 目录下创建新文件
+# data/datasets/fashion_mnist.py
+
+from torch.utils.data import Dataset
+from torchvision import datasets, transforms
+
+class FashionMNIST(Dataset):
+    """Fashion-MNIST 数据集封装"""
+    
+    def __init__(self, data_root: str, train: bool = True, preprocess=None):
+        # 设置默认变换
+        if preprocess is not None:
+            transform = preprocess
+        else:
+            transform = transforms.Compose([
+                transforms.ToTensor(),
+                transforms.Normalize((0.2860,), (0.3530,))  # Fashion-MNIST 统计值
+            ])
+        
+        self.dataset = datasets.FashionMNIST(
+            root=data_root,
+            train=train,
+            download=True,
+            transform=transform
+        )
+        
+        # 定义类别名称
+        self.classnames = [
+            'T-shirt/top', 'Trouser', 'Pullover', 'Dress', 'Coat',
+            'Sandal', 'Shirt', 'Sneaker', 'Bag', 'Ankle boot'
+        ]
+    
+    def __len__(self):
+        return len(self.dataset)
+    
+    def __getitem__(self, idx):
+        return self.dataset[idx]</code></pre>
+
+            <h3>注册新数据集</h3>
+            <pre><code># 在 data/data_loader.py 中添加新数据集
+from data.datasets import mnist, cifar10, fashion_mnist
+
+SUPPORTED_DATASETS = {
+    'mnist': mnist.MNIST,
+    'cifar10': cifar10.CIFAR10,
+    'fashion_mnist': fashion_mnist.FashionMNIST,  # 新增
+}
+
+# 现在可以在配置文件中使用 'fashion_mnist'</code></pre>
+
+            <h3>配置文件中使用新数据集</h3>
+            <pre><code># configs/fashion_mnist.yaml
+data:
+  datasets:
+    fashion_mnist:
+      # Fashion-MNIST 特定配置
+      
+client:
+  client_datasets:
+    client_0:
+      - fashion_mnist</code></pre>
+        </div>
+
+        <div class="content-section">
+            <h2>📊 数据统计和分析</h2>
+            
+            <h3>数据分布统计</h3>
+            <pre><code>def analyze_client_data_distribution(config):
+    """分析客户端数据分布"""
+    client_config = config['client']
+    num_clients = client_config['num_clients']
+    
+    distribution_stats = {}
+    
+    for client_id in range(num_clients):
+        client_key = f"client_{client_id}"
+        datasets = client_config['client_datasets'][client_key]
+        
+        client_stats = {}
+        total_samples = 0
+        
+        for dataset_name in datasets:
+            # 创建数据集实例进行统计
+            dataset_config = [{
+                'name': dataset_name,
+                'data_root': config['data'].get('data_dir', './data'),
+                'train': True
+            }]
+            
+            client_dataloaders = get_client_dataloaders(
+                dataset_configs=dataset_config,
+                client_id=client_id,
+                total_clients=num_clients,
+                batch_size=1
+            )
+            
+            samples = len(client_dataloaders[dataset_name].dataset)
+            client_stats[dataset_name] = samples
+            total_samples += samples
+        
+        client_stats['total'] = total_samples
+        distribution_stats[client_key] = client_stats
+    
+    return distribution_stats
+
+# 使用示例
+stats = analyze_client_data_distribution(config)
+for client_id, client_stats in stats.items():
+    print(f"{client_id}: {client_stats}")</code></pre>
+        </div>
+
+        <div class="content-section">
+            <h2>⚠️ 注意事项</h2>
+            <div class="warning-box">
+                <strong>数据分区一致性：</strong> 相同的客户端ID和总客户端数会产生相同的数据分区，确保实验的可重复性。
+            </div>
+            
+            <div class="warning-box">
+                <strong>内存使用：</strong> 大型数据集可能导致内存占用过高，考虑调整批大小或使用数据流式加载。
+            </div>
+            
+            <div class="info-box">
+                <strong>数据下载：</strong> 首次运行时会自动下载数据集，确保网络连接正常和足够的存储空间。
+            </div>
+            
+            <div class="warning-box">
+                <strong>路径配置：</strong> 确保 data_root 路径存在且有写入权限，用于存储下载的数据集。
+            </div>
+        </div>
+
+        <div class="content-section">
+            <h2>🚀 性能优化建议</h2>
+            <ul>
+                <li><strong>批大小调优：</strong> 根据内存和计算能力调整批大小，平衡训练效率和资源使用</li>
+                <li><strong>数据预加载：</strong> 使用 DataLoader 的 num_workers 参数启用多进程数据加载</li>
+                <li><strong>内存映射：</strong> 对于大型数据集，考虑使用内存映射减少内存占用</li>
+                <li><strong>数据缓存：</strong> 预处理后的数据可以缓存到磁盘，避免重复计算</li>
+            </ul>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <div class="footer-content">
+            <p>&copy; 2025 联邦学习框架. 所有权利保留.</p>
+            <p><a href="aggregation.html">上一页：Aggregation 模块</a> | <a href="models.html">下一页：Models 模块</a></p>
+        </div>
+    </footer>
+
+    <script src="assets/script.js"></script>
+</body>
+</html>

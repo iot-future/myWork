@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Communication 通信模块 - 联邦学习框架文档</title>
+    <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-logo">
+                <h2>🚀 联邦学习框架</h2>
+            </div>
+            <ul class="nav-menu">
+                <li><a href="index.html" class="nav-link">首页</a></li>
+                <li><a href="core.html" class="nav-link">Core</a></li>
+                <li><a href="aggregation.html" class="nav-link">Aggregation</a></li>
+                <li><a href="data.html" class="nav-link">Data</a></li>
+                <li><a href="models.html" class="nav-link">Models</a></li>
+                <li><a href="utils.html" class="nav-link">Utils</a></li>
+                <li><a href="execution-flow.html" class="nav-link">执行流程</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <div class="container">
+        <a href="index.html" class="back-button">← 返回首页</a>
+        
+        <header class="hero">
+            <h1>📡 Communication 通信模块</h1>
+            <p class="hero-subtitle">联邦学习客户端-服务器通信的抽象层和实现</p>
+        </header>
+
+        <div class="content-section">
+            <h2>模块概述</h2>
+            <p>Communication 模块提供了联邦学习系统中客户端和服务器之间通信的抽象接口和具体实现。该模块的设计使得框架可以支持不同的通信方式，如本地模拟、网络通信等，为分布式联邦学习提供了灵活的基础设施。</p>
+            
+            <div class="info-box">
+                <strong>设计目标：</strong> 提供统一的通信接口，支持多种通信实现，确保消息传递的可靠性和效率。
+            </div>
+        </div>
+
+        <div class="content-section">
+            <h2>📁 文件结构</h2>
+            <pre><code>communication/
+├── __init__.py          # 模块初始化
+└── local.py            # 本地通信实现（单机模拟）</code></pre>
+        </div>
+
+        <div class="content-section">
+            <h2>🔧 BaseCommunication 通信基类</h2>
+            <p>定义在 core/base.py 中，所有通信实现必须继承的抽象基类。</p>
+            
+            <h3>抽象方法</h3>
+            <ul class="method-list">
+                <li>
+                    <div class="method-signature">send_to_server(client_id: str, data: Any)</div>
+                    <div class="method-description">客户端向服务器发送数据，客户端主动推送更新</div>
+                </li>
+                <li>
+                    <div class="method-signature">send_to_client(client_id: str, data: Any)</div>
+                    <div class="method-description">服务器向指定客户端发送数据，用于发送全局模型</div>
+                </li>
+                <li>
+                    <div class="method-signature">broadcast_to_clients(data: Any)</div>
+                    <div class="method-description">服务器向所有已注册客户端广播数据</div>
+                </li>
+            </ul>
+        </div>
+
+        <div class="content-section">
+            <h2>🏠 LocalCommunication 本地通信实现</h2>
+            <p>BaseCommunication 的具体实现，用于在单机环境中模拟客户端-服务器通信。通过内存缓冲区实现消息传递，适用于实验和开发环境。</p>
+            
+            <h3>核心属性</h3>
+            <table class="property-table">
+                <tr>
+                    <th>属性名</th>
+                    <th>类型</th>
+                    <th>描述</th>
+                </tr>
+                <tr>
+                    <td>server_buffer</td>
+                    <td>Dict[str, List[Any]]</td>
+                    <td>服务器接收缓冲区，按客户端ID存储消息</td>
+                </tr>
+                <tr>
+                    <td>client_buffers</td>
+                    <td>Dict[str, List[Any]]</td>
+                    <td>客户端接收缓冲区，每个客户端一个缓冲区</td>
+                </tr>
+                <tr>
+                    <td>client_list</td>
+                    <td>List[str]</td>
+                    <td>已注册的客户端ID列表</td>
+                </tr>
+            </table>
+
+            <h3>核心方法</h3>
+            <ul class="method-list">
+                <li>
+                    <div class="method-signature">__init__()</div>
+                    <div class="method-description">初始化通信实例，创建空的缓冲区和客户端列表</div>
+                </li>
+                <li>
+                    <div class="method-signature">register_client(client_id: str)</div>
+                    <div class="method-description">注册新客户端，为其创建专用的接收缓冲区</div>
+                </li>
+                <li>
+                    <div class="method-signature">send_to_server(client_id: str, data: Any)</div>
+                    <div class="method-description">客户端发送数据到服务器，数据会被深拷贝以避免引用问题</div>
+                </li>
+                <li>
+                    <div class="method-signature">send_to_client(client_id: str, data: Any)</div>
+                    <div class="method-description">服务器发送数据到指定客户端</div>
+                </li>
+                <li>
+                    <div class="method-signature">broadcast_to_clients(data: Any)</div>
+                    <div class="method-description">服务器向所有已注册客户端广播数据</div>
+                </li>
+                <li>
+                    <div class="method-signature">receive_from_server(client_id: str) -> List[Any]</div>
+                    <div class="method-description">客户端接收来自服务器的数据，接收后清空缓冲区</div>
+                </li>
+                <li>
+                    <div class="method-signature">receive_from_clients() -> Dict[str, List[Any]]</div>
+                    <div class="method-description">服务器接收来自所有客户端的数据，返回按客户端分组的消息</div>
+                </li>
+                <li>
+                    <div class="method-signature">get_client_count() -> int</div>
+                    <div class="method-description">获取已注册的客户端数量</div>
+                </li>
+                <li>
+                    <div class="method-signature">clear_buffers()</div>
+                    <div class="method-description">清空所有缓冲区，用于重置通信状态</div>
+                </li>
+            </ul>
+        </div>
+
+        <div class="content-section">
+            <h2>🔄 通信流程</h2>
+            <div class="architecture-content">
+                <div class="architecture-diagram">
+                    <div class="arch-layer">
+                        <h4>1. 客户端注册</h4>
+                        <div class="arch-components">
+                            <span>register_client()</span>
+                            <span>创建缓冲区</span>
+                        </div>
+                    </div>
+                    <div class="arch-layer">
+                        <h4>2. 服务器广播</h4>
+                        <div class="arch-components">
+                            <span>broadcast_to_clients()</span>
+                            <span>全局模型参数</span>
+                        </div>
+                    </div>
+                    <div class="arch-layer">
+                        <h4>3. 客户端接收</h4>
+                        <div class="arch-components">
+                            <span>receive_from_server()</span>
+                            <span>本地训练</span>
+                        </div>
+                    </div>
+                    <div class="arch-layer">
+                        <h4>4. 客户端发送</h4>
+                        <div class="arch-components">
+                            <span>send_to_server()</span>
+                            <span>模型更新</span>
+                        </div>
+                    </div>
+                    <div class="arch-layer">
+                        <h4>5. 服务器聚合</h4>
+                        <div class="arch-components">
+                            <span>receive_from_clients()</span>
+                            <span>参数聚合</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="architecture-description">
+                    <h4>通信特点</h4>
+                    <ul>
+                        <li><strong>消息队列机制</strong>：使用缓冲区存储消息，支持异步通信</li>
+                        <li><strong>深拷贝保护</strong>：避免数据引用问题，确保数据独立性</li>
+                        <li><strong>批量处理</strong>：支持接收和处理多个消息</li>
+                        <li><strong>自动清理</strong>：接收消息后自动清空缓冲区</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="content-section">
+            <h2>💡 使用示例</h2>
+            <h3>基础通信设置</h3>
+            <pre><code># 创建通信实例
+comm = LocalCommunication()
+
+# 注册客户端
+client_ids = ["client_0", "client_1", "client_2"]
+for client_id in client_ids:
+    comm.register_client(client_id)
+
+print(f"注册客户端数量: {comm.get_client_count()}")</code></pre>
+
+            <h3>服务器广播全局模型</h3>
+            <pre><code># 服务器广播全局模型参数
+global_params = server.send_global_model()
+comm.broadcast_to_clients(global_params)
+
+# 客户端接收全局模型
+for client_id in client_ids:
+    messages = comm.receive_from_server(client_id)
+    if messages:
+        global_model_params = messages[0]  # 获取最新的全局模型
+        # 客户端使用全局模型进行训练</code></pre>
+
+            <h3>客户端发送训练结果</h3>
+            <pre><code># 客户端训练并发送结果
+for client in clients:
+    # 执行本地训练
+    result = client.train(global_model_params)
+    
+    # 发送训练结果到服务器
+    comm.send_to_server(client.client_id, result)
+
+# 服务器接收所有客户端更新
+client_updates_dict = comm.receive_from_clients()
+
+# 整理客户端更新为列表
+client_updates = []
+for client_id, updates in client_updates_dict.items():
+    if updates:
+        client_updates.append(updates[0])  # 获取最新更新</code></pre>
+
+            <h3>完整的联邦学习轮次通信</h3>
+            <pre><code>def federated_round(server, clients, comm):
+    # 1. 服务器广播全局模型
+    global_params = server.send_global_model()
+    comm.broadcast_to_clients(global_params)
+    
+    # 2. 客户端接收、训练并发送更新
+    for client in clients:
+        # 接收全局模型
+        messages = comm.receive_from_server(client.client_id)
+        if messages:
+            global_model_params = messages[0]
+            
+            # 本地训练
+            result = client.train(global_model_params)
+            
+            # 发送更新
+            comm.send_to_server(client.client_id, result)
+    
+    # 3. 服务器接收并聚合
+    client_updates_dict = comm.receive_from_clients()
+    client_updates = [updates[0] for updates in client_updates_dict.values() if updates]
+    
+    # 4. 服务器聚合
+    server.aggregate(client_updates)
+    
+    return len(client_updates)</code></pre>
+        </div>
+
+        <div class="content-section">
+            <h2>⚠️ 注意事项</h2>
+            <div class="warning-box">
+                <strong>内存管理：</strong> LocalCommunication 使用内存缓冲区，大量数据可能导致内存占用过高。定期调用 clear_buffers() 清理缓冲区。
+            </div>
+            
+            <div class="warning-box">
+                <strong>数据安全：</strong> 所有数据传输都使用深拷贝，确保数据独立性，但会增加内存开销。
+            </div>
+            
+            <div class="warning-box">
+                <strong>并发安全：</strong> 当前实现不是线程安全的，多线程环境下需要额外的同步机制。
+            </div>
+        </div>
+
+        <div class="content-section">
+            <h2>🔧 扩展指南</h2>
+            <h3>实现网络通信</h3>
+            <pre><code>class NetworkCommunication(BaseCommunication):
+    """基于网络的通信实现示例"""
+    
+    def __init__(self, server_host, server_port):
+        self.server_host = server_host
+        self.server_port = server_port
+        self.client_sockets = {}
+    
+    def send_to_server(self, client_id: str, data: Any):
+        # 实现网络发送逻辑
+        serialized_data = pickle.dumps(data)
+        # 发送到服务器
+        pass
+    
+    def broadcast_to_clients(self, data: Any):
+        # 实现网络广播逻辑
+        serialized_data = pickle.dumps(data)
+        for client_socket in self.client_sockets.values():
+            # 发送到每个客户端
+            pass</code></pre>
+
+            <h3>添加消息确认机制</h3>
+            <pre><code>class ReliableCommunication(LocalCommunication):
+    """带消息确认的通信实现"""
+    
+    def __init__(self):
+        super().__init__()
+        self.pending_messages = {}  # 待确认消息
+        self.message_counter = 0
+    
+    def send_with_ack(self, sender_id: str, receiver_id: str, data: Any):
+        message_id = self.message_counter
+        self.message_counter += 1
+        
+        message = {
+            'id': message_id,
+            'data': data,
+            'timestamp': time.time()
+        }
+        
+        # 存储待确认消息
+        self.pending_messages[message_id] = message
+        
+        # 发送消息
+        if receiver_id == 'server':
+            self.send_to_server(sender_id, message)
+        else:
+            self.send_to_client(receiver_id, message)
+        
+        return message_id</code></pre>
+        </div>
+
+        <div class="content-section">
+            <h2>🚀 性能优化建议</h2>
+            <ul>
+                <li><strong>批量传输：</strong> 将多个小消息合并为批量传输，减少通信开销</li>
+                <li><strong>数据压缩：</strong> 对大型模型参数进行压缩，减少传输时间</li>
+                <li><strong>缓冲区管理：</strong> 定期清理不需要的缓冲区，控制内存使用</li>
+                <li><strong>异步处理：</strong> 使用异步IO提高通信效率</li>
+            </ul>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <div class="footer-content">
+            <p>&copy; 2025 联邦学习框架. 所有权利保留.</p>
+            <p><a href="core.html">上一页：Core 模块</a> | <a href="aggregation.html">下一页：Aggregation 模块</a></p>
+        </div>
+    </footer>
+
+    <script src="assets/script.js"></script>
+</body>
+</html>

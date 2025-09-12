@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Core 核心模块 - 联邦学习框架文档</title>
+    <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-logo">
+                <h2>🚀 联邦学习框架</h2>
+            </div>
+            <ul class="nav-menu">
+                <li><a href="index.html" class="nav-link">首页</a></li>
+                <li><a href="communication.html" class="nav-link">Communication</a></li>
+                <li><a href="aggregation.html" class="nav-link">Aggregation</a></li>
+                <li><a href="data.html" class="nav-link">Data</a></li>
+                <li><a href="models.html" class="nav-link">Models</a></li>
+                <li><a href="utils.html" class="nav-link">Utils</a></li>
+                <li><a href="execution-flow.html" class="nav-link">执行流程</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <div class="container">
+        <a href="index.html" class="back-button">← 返回首页</a>
+        
+        <header class="hero">
+            <h1>🧠 Core 核心模块</h1>
+            <p class="hero-subtitle">联邦学习框架的核心抽象层和实现</p>
+        </header>
+
+        <div class="content-section">
+            <h2>模块概述</h2>
+            <p>Core 模块是整个联邦学习框架的核心，提供了客户端、服务器和模型的基础抽象类，以及具体的实现。该模块遵循面向对象设计原则，使用抽象基类（ABC）确保接口的一致性和可扩展性。</p>
+            
+            <div class="info-box">
+                <strong>设计理念：</strong> 通过抽象基类定义统一接口，确保所有子类实现特定方法，提供框架的核心扩展点。
+            </div>
+        </div>
+
+        <div class="content-section">
+            <h2>📁 文件结构</h2>
+            <pre><code>core/
+├── __init__.py          # 模块初始化
+├── base.py             # 基础抽象类定义
+├── client.py           # 联邦学习客户端实现
+└── server.py           # 联邦学习服务器实现</code></pre>
+        </div>
+
+        <div class="content-section">
+            <h2>🔧 BaseClient 客户端基类</h2>
+            <p>所有联邦学习客户端必须继承的抽象基类，定义了客户端的核心接口。</p>
+            
+            <h3>核心属性</h3>
+            <table class="property-table">
+                <tr>
+                    <th>属性名</th>
+                    <th>类型</th>
+                    <th>描述</th>
+                </tr>
+                <tr>
+                    <td>client_id</td>
+                    <td>str</td>
+                    <td>客户端唯一标识符</td>
+                </tr>
+                <tr>
+                    <td>model</td>
+                    <td>Any</td>
+                    <td>客户端本地模型实例</td>
+                </tr>
+                <tr>
+                    <td>data</td>
+                    <td>Any</td>
+                    <td>客户端本地数据</td>
+                </tr>
+            </table>
+
+            <h3>抽象方法</h3>
+            <ul class="method-list">
+                <li>
+                    <div class="method-signature">train(global_model_params: Dict[str, Any]) -> Dict[str, Any]</div>
+                    <div class="method-description">使用全局模型参数进行本地训练，返回训练后的模型参数</div>
+                </li>
+                <li>
+                    <div class="method-signature">set_data(data)</div>
+                    <div class="method-description">设置客户端的本地训练数据</div>
+                </li>
+            </ul>
+        </div>
+
+        <div class="content-section">
+            <h2>🖥️ BaseServer 服务器基类</h2>
+            <p>联邦学习服务器的抽象基类，定义了服务器端的核心功能接口。</p>
+            
+            <h3>核心属性</h3>
+            <table class="property-table">
+                <tr>
+                    <th>属性名</th>
+                    <th>类型</th>
+                    <th>描述</th>
+                </tr>
+                <tr>
+                    <td>global_model</td>
+                    <td>Any</td>
+                    <td>全局模型实例</td>
+                </tr>
+                <tr>
+                    <td>clients</td>
+                    <td>List</td>
+                    <td>注册的客户端列表</td>
+                </tr>
+            </table>
+
+            <h3>抽象方法</h3>
+            <ul class="method-list">
+                <li>
+                    <div class="method-signature">aggregate(client_updates: List[Dict[str, Any]]) -> Dict[str, Any]</div>
+                    <div class="method-description">聚合客户端更新，返回聚合后的全局模型参数</div>
+                </li>
+                <li>
+                    <div class="method-signature">initialize_model()</div>
+                    <div class="method-description">初始化全局模型</div>
+                </li>
+            </ul>
+        </div>
+
+        <div class="content-section">
+            <h2>🧮 BaseModel 模型基类</h2>
+            <p>所有模型实现的基础抽象类，提供统一的模型接口和优化器管理。</p>
+            
+            <h3>核心属性</h3>
+            <table class="property-table">
+                <tr>
+                    <th>属性名</th>
+                    <th>类型</th>
+                    <th>描述</th>
+                </tr>
+                <tr>
+                    <td>optimizer_config</td>
+                    <td>Dict[str, Any]</td>
+                    <td>优化器配置参数</td>
+                </tr>
+                <tr>
+                    <td>optimizer</td>
+                    <td>Any</td>
+                    <td>优化器实例</td>
+                </tr>
+            </table>
+
+            <h3>核心方法</h3>
+            <ul class="method-list">
+                <li>
+                    <div class="method-signature">create_optimizer(model_parameters)</div>
+                    <div class="method-description">创建AdamW优化器，支持自定义配置或使用默认配置</div>
+                </li>
+                <li>
+                    <div class="method-signature">_ensure_device_compatibility(*tensors)</div>
+                    <div class="method-description">确保张量在正确的设备上（CPU/GPU）</div>
+                </li>
+                <li>
+                    <div class="method-signature">_get_model_device()</div>
+                    <div class="method-description">获取模型所在的设备</div>
+                </li>
+            </ul>
+
+            <h3>抽象方法</h3>
+            <ul class="method-list">
+                <li>
+                    <div class="method-signature">get_parameters() -> Dict[str, Any]</div>
+                    <div class="method-description">获取模型参数字典</div>
+                </li>
+                <li>
+                    <div class="method-signature">set_parameters(params: Dict[str, Any])</div>
+                    <div class="method-description">设置模型参数</div>
+                </li>
+                <li>
+                    <div class="method-signature">train_step(data, labels)</div>
+                    <div class="method-description">执行单步训练</div>
+                </li>
+                <li>
+                    <div class="method-signature">evaluate(data, labels)</div>
+                    <div class="method-description">评估模型性能</div>
+                </li>
+            </ul>
+        </div>
+
+        <div class="content-section">
+            <h2>📡 BaseCommunication 通信基类</h2>
+            <p>定义客户端-服务器通信的抽象接口，支持不同的通信实现方式。</p>
+            
+            <h3>抽象方法</h3>
+            <ul class="method-list">
+                <li>
+                    <div class="method-signature">send_to_server(client_id: str, data: Any)</div>
+                    <div class="method-description">客户端向服务器发送数据</div>
+                </li>
+                <li>
+                    <div class="method-signature">send_to_client(client_id: str, data: Any)</div>
+                    <div class="method-description">服务器向指定客户端发送数据</div>
+                </li>
+                <li>
+                    <div class="method-signature">broadcast_to_clients(data: Any)</div>
+                    <div class="method-description">服务器向所有客户端广播数据</div>
+                </li>
+            </ul>
+        </div>
+
+        <div class="content-section">
+            <h2>🔧 FederatedClient 客户端实现</h2>
+            <p>BaseClient 的具体实现，提供完整的联邦学习客户端功能。</p>
+            
+            <h3>初始化参数</h3>
+            <table class="property-table">
+                <tr>
+                    <th>参数名</th>
+                    <th>类型</th>
+                    <th>描述</th>
+                </tr>
+                <tr>
+                    <td>client_id</td>
+                    <td>str</td>
+                    <td>客户端标识符</td>
+                </tr>
+                <tr>
+                    <td>model</td>
+                    <td>BaseModel</td>
+                    <td>本地模型实例</td>
+                </tr>
+                <tr>
+                    <td>data_loader</td>
+                    <td>DataLoader</td>
+                    <td>本地数据加载器</td>
+                </tr>
+                <tr>
+                    <td>epochs</td>
+                    <td>int</td>
+                    <td>本地训练轮数，默认为1</td>
+                </tr>
+                <tr>
+                    <td>learning_rate</td>
+                    <td>float</td>
+                    <td>学习率，默认为0.01</td>
+                </tr>
+                <tr>
+                    <td>device</td>
+                    <td>torch.device</td>
+                    <td>计算设备，默认为CPU</td>
+                </tr>
+            </table>
+
+            <h3>核心方法</h3>
+            <ul class="method-list">
+                <li>
+                    <div class="method-signature">train(global_model_params, show_progress=False)</div>
+                    <div class="method-description">执行本地训练，支持进度显示，返回模型参数和训练指标</div>
+                </li>
+                <li>
+                    <div class="method-signature">evaluate_on_local_data()</div>
+                    <div class="method-description">在本地数据上评估模型性能</div>
+                </li>
+                <li>
+                    <div class="method-signature">set_data(data_loader)</div>
+                    <div class="method-description">设置数据加载器</div>
+                </li>
+            </ul>
+
+            <div class="info-box">
+                <strong>特性：</strong> 支持多轮本地训练、自动设备管理、训练指标收集和进度显示。
+            </div>
+        </div>
+
+        <div class="content-section">
+            <h2>🖥️ FederatedServer 服务器实现</h2>
+            <p>BaseServer 的具体实现，提供完整的联邦学习服务器功能。</p>
+            
+            <h3>初始化参数</h3>
+            <table class="property-table">
+                <tr>
+                    <th>参数名</th>
+                    <th>类型</th>
+                    <th>描述</th>
+                </tr>
+                <tr>
+                    <td>global_model</td>
+                    <td>BaseModel</td>
+                    <td>全局模型实例</td>
+                </tr>
+                <tr>
+                    <td>aggregator</td>
+                    <td>FederatedAveraging</td>
+                    <td>模型聚合算法</td>
+                </tr>
+            </table>
+
+            <h3>核心属性</h3>
+            <table class="property-table">
+                <tr>
+                    <th>属性名</th>
+                    <th>类型</th>
+                    <th>描述</th>
+                </tr>
+                <tr>
+                    <td>round_num</td>
+                    <td>int</td>
+                    <td>当前训练轮次</td>
+                </tr>
+                <tr>
+                    <td>client_weights</td>
+                    <td>Dict[str, float]</td>
+                    <td>客户端权重字典</td>
+                </tr>
+            </table>
+
+            <h3>核心方法</h3>
+            <ul class="method-list">
+                <li>
+                    <div class="method-signature">aggregate(client_updates)</div>
+                    <div class="method-description">使用聚合算法聚合客户端更新，更新全局模型</div>
+                </li>
+                <li>
+                    <div class="method-signature">send_global_model()</div>
+                    <div class="method-description">获取全局模型参数，用于发送给客户端</div>
+                </li>
+                <li>
+                    <div class="method-signature">set_client_weights(client_weights)</div>
+                    <div class="method-description">设置客户端权重，用于加权聚合</div>
+                </li>
+                <li>
+                    <div class="method-signature">evaluate_global_model(test_data, test_labels)</div>
+                    <div class="method-description">评估全局模型在测试数据上的性能</div>
+                </li>
+                <li>
+                    <div class="method-signature">evaluate_with_dataloader(test_dataloader)</div>
+                    <div class="method-description">使用数据加载器评估全局模型</div>
+                </li>
+            </ul>
+        </div>
+
+        <div class="content-section">
+            <h2>💡 使用示例</h2>
+            <h3>创建客户端</h3>
+            <pre><code># 创建模型和数据加载器
+model = ModelFactory.create_model(model_config)
+data_loader = get_client_dataloaders([dataset_config])[0]
+
+# 创建客户端
+client = FederatedClient(
+    client_id="client_0",
+    model=model,
+    data_loader=data_loader,
+    epochs=5,
+    learning_rate=0.001,
+    device=torch.device('cuda')
+)
+
+# 执行训练
+result = client.train(global_model_params)
+print(f"训练损失: {result['metrics']['loss']}")
+print(f"准确率: {result['metrics']['accuracy']}")</code></pre>
+
+            <h3>创建服务器</h3>
+            <pre><code># 创建全局模型和聚合器
+global_model = ModelFactory.create_model(model_config)
+aggregator = FederatedAveraging()
+
+# 创建服务器
+server = FederatedServer(global_model, aggregator)
+
+# 聚合客户端更新
+aggregated_params = server.aggregate(client_updates)
+
+# 评估全局模型
+metrics = server.evaluate_with_dataloader(test_dataloader)</code></pre>
+        </div>
+
+        <div class="content-section">
+            <h2>🔧 扩展指南</h2>
+            <div class="warning-box">
+                <strong>扩展新客户端类型：</strong> 继承 BaseClient 并实现所有抽象方法，确保遵循训练和数据设置的接口规范。
+            </div>
+            
+            <div class="warning-box">
+                <strong>扩展新服务器类型：</strong> 继承 BaseServer 并实现聚合逻辑，可以支持不同的联邦学习算法。
+            </div>
+            
+            <div class="warning-box">
+                <strong>扩展新模型类型：</strong> 继承 BaseModel 并实现参数获取/设置、训练和评估方法。
+            </div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <div class="footer-content">
+            <p>&copy; 2025 联邦学习框架. 所有权利保留.</p>
+            <p><a href="index.html">返回首页</a> | <a href="communication.html">下一页：Communication 模块</a></p>
+        </div>
+    </footer>
+
+    <script src="assets/script.js"></script>
+</body>
+</html>
