@@ -1,24 +1,36 @@
 # 简单MNIST联邦学习实验配置
-# 所有客户端都使用MNIST数据集
+# 用于快速验证和调试的简化版本，客户端数量少，轮数少
 
+# ==============================
 # 实验基本设置
+# ==============================
 experiment:
-  name: "simple_mnist_experiment"
-  rounds: 5
-  seed: 42
+  name: "simple_mnist_experiment"          # 实验名称
+  rounds: 5                                # 较少的轮数，用于快速验证
+  seed: 42                                 # 随机种子
 
-# WandB 配置
+# ==============================
+# 设备配置
+# ==============================
+device: "auto"  # auto: 自动检测GPU, cuda: 强制GPU, cpu: 强制CPU
+
+# ==============================
+# 分布式训练和日志配置
+# ==============================
 wandb:
-  enabled: false
-  project: "federated-learning"
+  enabled: false                           # 关闭WandB，简化调试
+  project: "federated-learning"            # WandB项目名称
+  offline: false                           # 不使用离线模式
 
-# 客户端设置
+# ==============================
+# 客户端配置
+# ==============================
 client:
-  num_clients: 3
-  local_epochs: 3
-  learning_rate: 0.001
+  num_clients: 3                           # 少量客户端，便于调试
+  local_epochs: 3                          # 本地训练轮数
+  learning_rate: 0.001                     # 客户端学习率
   
-  # 客户端数据集配置
+  # 客户端数据集分配 - 所有客户端使用MNIST
   client_datasets:
     client_0:
       - mnist
@@ -27,33 +39,49 @@ client:
     client_2:
       - mnist
   
-# 服务器设置  
+# ==============================
+# 服务器配置
+# ==============================
 server:
-  aggregation_method: "federated_avg"
+  aggregation_method: "federated_avg"      # FedAvg算法
+  server_learning_rate: 1.0                # 服务器学习率
 
-# 模型设置
+# ==============================
+# 模型配置
+# ==============================
 model:
-  type: "cnn"
-  learning_rate: 0.01
+  type: "cnn"                              # CNN模型
+  learning_rate: 0.001                     # 模型学习率（保持一致）
 
-# 优化器设置
+# ==============================
+# 优化器配置
+# ==============================
 optimizer:
-  learning_rate: 0.01
-  weight_decay: 0.01
-  betas: [0.9, 0.999]
-  eps: 1e-8
+  type: "adamw"                            # 优化器类型
+  learning_rate: 0.001                     # 学习率（修正：统一使用0.001）
+  weight_decay: 0.01                       # 权重衰减
+  betas: [0.9, 0.999]                     # Adam beta参数
+  eps: 1e-8                               # 数值稳定性参数
 
-# 数据设置
+# ==============================
+# 数据集配置
+# ==============================
 data:
-  data_dir: "/home/zzm/dataset/"
-  batch_size: 64
+  data_dir: "/home/zzm/dataset/"           # 数据集根目录
+  batch_size: 64                           # 较大的批次大小，适合简单实验
+  num_workers: 2                           # 数据加载器工作进程数
   
-  # 数据集配置
+  # 具体数据集配置
   datasets:
     mnist:
-      train: true
+      train: true                          # 使用MNIST训练集
 
-# 评估设置
+# ==============================
+# 评估配置
+# ==============================
 evaluation:
-  evaluate_every: 1
-  test_batch_size: 100
+  evaluate_every: 1                        # 每轮都评估
+  test_batch_size: 100                     # 测试批次大小
+  metrics:                                 # 评估指标
+    - "loss"
+    - "accuracy"

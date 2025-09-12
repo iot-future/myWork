@@ -1,23 +1,36 @@
-# 默认实验配置文件
+# 默认联邦学习实验配置文件
+# 这是所有其他配置文件的基础模板
 
+# ==============================
 # 实验基本设置
+# ==============================
 experiment:
-  name: "federated_learning_experiment"
-  rounds: 10
-  seed: 42
+  name: "federated_learning_experiment"    # 实验名称
+  rounds: 10                               # 联邦学习轮数
+  seed: 42                                 # 随机种子，确保可重复性
 
-# WandB 配置
+# ==============================
+# 设备配置
+# ==============================
+device: "auto"  # auto: 自动检测GPU, cuda: 强制GPU, cpu: 强制CPU
+
+# ==============================
+# 分布式训练和日志配置
+# ==============================
 wandb:
-  enabled: false  # 是否启用WandB
-  project: "federated-learning"
+  enabled: false                           # 是否启用WandB日志
+  project: "federated-learning"            # WandB项目名称
+  offline: false                           # 是否使用离线模式
 
-# 客户端设置
+# ==============================
+# 客户端配置
+# ==============================
 client:
-  num_clients: 5
-  local_epochs: 5
-  learning_rate: 0.001  # AdamW默认学习率
+  num_clients: 5                           # 总客户端数量
+  local_epochs: 5                          # 每个客户端本地训练轮数
+  learning_rate: 0.001                     # 客户端学习率
   
-  # 客户端数据集配置 - 所有客户端使用MNIST
+  # 客户端数据集分配 - 定义每个客户端使用的数据集
   client_datasets:
     client_0:
       - mnist
@@ -30,33 +43,50 @@ client:
     client_4:
       - mnist
   
-# 服务器设置  
+# ==============================
+# 服务器配置
+# ==============================
 server:
-  aggregation_method: "federated_avg"
+  aggregation_method: "federated_avg"      # 聚合算法: federated_avg
+  server_learning_rate: 1.0                # 服务器端学习率
 
-# 模型设置
+# ==============================
+# 模型配置
+# ==============================
 model:
-  type: "cnn"  # 可选: "cnn", "linear"
-  learning_rate: 0.001  # AdamW默认学习率
+  type: "cnn"                              # 模型类型: cnn, linear, clip
+  learning_rate: 0.001                     # 模型学习率（与优化器学习率保持一致）
 
-# 优化器设置 - 统一使用AdamW
+# ==============================
+# 优化器配置
+# ==============================
 optimizer:
-  learning_rate: 0.001
-  weight_decay: 0.01
-  betas: [0.9, 0.999]
-  eps: 1e-8
+  type: "adamw"                            # 优化器类型
+  learning_rate: 0.001                     # 学习率
+  weight_decay: 0.01                       # 权重衰减
+  betas: [0.9, 0.999]                     # Adam beta参数
+  eps: 1e-8                               # 数值稳定性参数
 
-# 数据设置
+# ==============================
+# 数据集配置
+# ==============================
 data:
-  data_dir: "/home/zzm/dataset/"
-  batch_size: 32
+  data_dir: "/home/zzm/dataset/"           # 数据集根目录
+  batch_size: 32                           # 训练批次大小
+  num_workers: 2                           # 数据加载器工作进程数
   
-  # 数据集配置
+  # 具体数据集配置
   datasets:
     mnist:
-      train: true
+      train: true                          # 是否使用训练集
+      # test: true                         # 是否使用测试集
 
-# 评估设置
+# ==============================
+# 评估配置
+# ==============================
 evaluation:
-  evaluate_every: 1  # 每隔多少轮评估一次
-  test_batch_size: 100
+  evaluate_every: 1                        # 每隔多少轮评估一次
+  test_batch_size: 100                     # 测试批次大小
+  metrics:                                 # 评估指标
+    - "loss"
+    - "accuracy"

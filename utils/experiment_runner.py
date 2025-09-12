@@ -7,8 +7,10 @@ import os
 import random
 import numpy as np
 import torch
+import time
 from typing import Dict, Any, List
 from torch.utils.data import DataLoader, ConcatDataset
+from tqdm import tqdm
 
 from core.server import FederatedServer
 from core.client import FederatedClient
@@ -61,6 +63,11 @@ class ExperimentRunner:
         # 创建评估管理器
         verbose = config.get('evaluation', {}).get('verbose', True)
         self.evaluation_manager = EvaluationManager(verbose=verbose)
+        
+        # 时间追踪变量
+        self.experiment_start_time = None
+        self.round_times = []
+        self.client_training_times = []
 
     def setup_environment(self):
         """设置实验环境"""
@@ -257,24 +264,35 @@ class ExperimentRunner:
 
     def run_federated_round(self, round_num: int) -> Dict[str, float]:
         """执行一轮联邦学习"""
+        round_start_time = time.time()
+        
         # 获取全局模型参数
         global_params = self.server.send_global_model()
 
-        # 所有客户端进行本地训练
+        # 所有客户端进行本地训练 - 使用简洁的进度条
         client_updates = []
-        for client in self.clients:
-            client_result = client.train(global_params)
-            client_updates.append(client_result)
+        
+        with tqdm(self.clients, desc=f"第{round_num}轮训练", 
+                  bar_format="{desc}: {percentage:3.0f}%|{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]",
+                  ncols=70, leave=False) as pbar:
+            
+            for i, client in enumerate(pbar):
+                client_result = client.train(global_params)
+                client_updates.append(client_result)
+                
+                # 简化的进度信息
+                loss = client_result.get('metrics', {}).get('loss', 0)
+                pbar.set_postfix({'Loss': f'{loss:.3f}'})
 
-            # 记录客户端指标到wandb（简化版）
-            if self.use_wandb and 'metrics' in client_result:
-                metrics = client_result['metrics']
-                log_client_metrics(
-                    client.client_id,
-                    round_num,
-                    metrics.get('loss', 0.0),
-                    metrics.get('accuracy')
-                )
+                # 记录客户端指标到wandb
+                if self.use_wandb and 'metrics' in client_result:
+                    metrics = client_result['metrics']
+                    log_client_metrics(
+                        client.client_id,
+                        round_num,
+                        metrics.get('loss', 0.0),
+                        metrics.get('accuracy')
+                    )
 
         # 服务器聚合
         self.server.aggregate(client_updates)
@@ -332,13 +350,19 @@ class ExperimentRunner:
         # 运行联邦学习轮次
         rounds = self.config['experiment']['rounds']
         all_metrics = []
+        self.experiment_start_time = time.time()
 
-        for round_num in range(1, rounds + 1):
-            print(f"\n--- 第 {round_num} 轮 ---")
-            metrics = self.run_federated_round(round_num)
-            if metrics:
-                metrics['round'] = round_num
-                all_metrics.append(metrics)
+        # 使用总体进度条
+        with tqdm(range(1, rounds + 1), desc="实验进度", unit="轮") as round_pbar:
+            for round_num in round_pbar:
+                metrics = self.run_federated_round(round_num)
+                if metrics:
+                    metrics['round'] = round_num
+                    all_metrics.append(metrics)
+                
+                # 更新总体进度条
+                if metrics and 'accuracy' in metrics:
+                    round_pbar.set_postfix({'Acc': f"{metrics['accuracy']:.2f}%"})
 
         # 打印最终总结
         self._print_final_summary()

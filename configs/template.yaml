@@ -1,0 +1,139 @@
+# 联邦学习实验配置模板
+# 复制此文件并修改相应参数来创建新的实验配置
+
+# ==============================
+# 实验基本设置
+# ==============================
+experiment:
+  name: "new_experiment"                   # 修改为你的实验名称
+  rounds: 10                               # 根据需要调整训练轮数
+  seed: 42                                 # 随机种子，建议保持42
+
+# ==============================
+# 设备配置
+# ==============================
+device: "auto"  # auto: 自动检测GPU, cuda: 强制GPU, cpu: 强制CPU
+
+# ==============================
+# 分布式训练和日志配置
+# ==============================
+wandb:
+  enabled: false                           # 调试时建议设为false
+  project: "federated-learning"            # 修改为你的项目名称
+  offline: false                           # 是否使用离线模式
+
+# ==============================
+# 客户端配置
+# ==============================
+client:
+  num_clients: 5                           # 根据实验需要调整客户端数量
+  local_epochs: 3                          # 本地训练轮数
+  learning_rate: 0.001                     # 客户端学习率
+  
+  # 客户端数据集分配 - 根据需要修改
+  client_datasets:
+    client_0:
+      - mnist                              # 修改为需要的数据集
+    client_1:
+      - mnist
+    client_2:
+      - mnist
+    client_3:
+      - mnist
+    client_4:
+      - mnist
+    # 根据num_clients数量添加更多客户端配置
+  
+# ==============================
+# 服务器配置
+# ==============================
+server:
+  aggregation_method: "federated_avg"      # 聚合算法
+  server_learning_rate: 1.0                # 服务器学习率
+
+# ==============================
+# 模型配置
+# ==============================
+model:
+  type: "cnn"                              # 模型类型: cnn, linear, clip
+  learning_rate: 0.001                     # 模型学习率（与client保持一致）
+  
+  # 如果使用CLIP模型，取消下面的注释并配置
+  # model_name: "openai/clip-vit-base-patch32"
+  # cache_dir: "/home/zzm/checkpoint"
+  # use_pretrained: true
+  # temperature: 0.07
+  # freeze_vision_encoder: false
+  # freeze_text_encoder: false
+
+# ==============================
+# 优化器配置
+# ==============================
+optimizer:
+  type: "adamw"                            # 优化器类型
+  learning_rate: 0.001                     # 学习率（与上面保持一致）
+  weight_decay: 0.01                       # 权重衰减
+  betas: [0.9, 0.999]                     # Adam beta参数
+  eps: 1e-8                               # 数值稳定性参数
+
+# ==============================
+# 数据集配置
+# ==============================
+data:
+  data_dir: "/home/zzm/dataset/"           # 修改为你的数据集路径
+  batch_size: 32                           # 根据GPU内存调整
+  num_workers: 2                           # 数据加载器工作进程数
+  
+  # 具体数据集配置 - 根据需要添加数据集
+  datasets:
+    mnist:
+      train: true
+    # cifar10:
+    #   train: true
+    # 添加其他需要的数据集
+
+# ==============================
+# 评估配置
+# ==============================
+evaluation:
+  evaluate_every: 1                        # 评估频率
+  test_batch_size: 100                     # 测试批次大小
+  metrics:                                 # 评估指标
+    - "loss"
+    - "accuracy"
+    # - "top5_accuracy"                    # 如果需要
+    # - "contrastive_loss"                 # CLIP模型专用
+
+# ==============================
+# 自定义配置示例
+# ==============================
+# 下面是一些常见的配置变体，可以根据需要取消注释
+
+# # 快速调试配置
+# experiment:
+#   rounds: 3
+# client:
+#   num_clients: 2
+#   local_epochs: 1
+# data:
+#   batch_size: 64
+
+# # 大规模实验配置
+# experiment:
+#   rounds: 50
+# client:
+#   num_clients: 20
+#   local_epochs: 5
+# data:
+#   batch_size: 16
+
+# # CLIP模型配置
+# model:
+#   type: "clip"
+#   learning_rate: 5e-5
+# optimizer:
+#   learning_rate: 5e-5
+#   weight_decay: 0.1
+#   betas: [0.9, 0.98]
+# data:
+#   batch_size: 16

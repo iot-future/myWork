@@ -3,6 +3,7 @@ from typing import Dict, Any
 import copy
 from .base import BaseClient
 from utils.device_manager import device_manager
+import sys
 
 
 class FederatedClient(BaseClient):
@@ -16,7 +17,7 @@ class FederatedClient(BaseClient):
         self.learning_rate = learning_rate
         self.device = device or torch.device('cpu')
     
-    def train(self, global_model_params: Dict[str, Any]) -> Dict[str, Any]:
+    def train(self, global_model_params: Dict[str, Any], show_progress: bool = False) -> Dict[str, Any]:
         """
         本地训练实现
         返回模型参数和训练指标
@@ -31,6 +32,10 @@ class FederatedClient(BaseClient):
         total_loss = 0.0
         total_samples = 0
         
+        # 添加简单的进度反馈
+        total_batches = len(self.data_loader) * self.epochs
+        batch_count = 0
+        
         for epoch in range(self.epochs):
             for batch_data, batch_labels in self.data_loader:
                 # 将数据移到设备
@@ -41,6 +46,17 @@ class FederatedClient(BaseClient):
                 loss = self.model.train_step(batch_data, batch_labels)
                 total_loss += loss * batch_data.size(0)
                 total_samples += batch_data.size(0)
+                
+                # 简单的进度输出（避免干扰主进度条）
+                batch_count += 1
+                if show_progress and batch_count % max(1, total_batches // 4) == 0:
+                    progress = batch_count / total_batches * 100
+                    print(f"\r    {self.client_id}: {progress:.0f}%", end='', flush=True)
+        
+        # 清除进度输出
+        if show_progress:
+            print(f"\r    {self.client_id}: 完成", end='', flush=True)
+            sys.stdout.write('\r' + ' ' * 20 + '\r')  # 清除行
         
         # 计算平均损失
         avg_loss = total_loss / total_samples if total_samples > 0 else 0.0
