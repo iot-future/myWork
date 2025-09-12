@@ -45,8 +45,16 @@ class FederatedServer(BaseServer):
     
     def evaluate_global_model(self, test_data, test_labels):
         """评估全局模型"""
-        return self.global_model.evaluate(test_data, test_labels)
+        try:
+            return self.global_model.evaluate(test_data, test_labels)
+        except Exception as e:
+            print(f"⚠️  全局模型评估失败: {str(e)}")
+            return {}
     
     def evaluate_with_dataloader(self, test_dataloader):
         """使用数据加载器评估全局模型"""
-        return self.global_model.evaluate_with_dataloader(test_dataloader)
+        try:
+            return self.global_model.evaluate_with_dataloader(test_dataloader)
+        except Exception as e:
+            print(f"⚠️  全局模型数据加载器评估失败: {str(e)}")
+            return {}

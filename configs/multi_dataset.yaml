@@ -8,8 +8,9 @@ experiment:
 
 # WandB 配置
 wandb:
-  enabled: false  # 是否启用WandB
+  enabled: true  # 是否启用WandB
   project: "federated-learning"
+  offline: true  # 是否离线模式
 
 # 客户端设置
 client:
@@ -35,7 +36,7 @@ server:
 
 # 模型设置
 model:
-  type: "cnn"  # 可选: "cnn", "linear"
+  type: "cnn" 
   learning_rate: 0.001  # AdamW默认学习率
 
 # 优化器设置 - 统一使用AdamW

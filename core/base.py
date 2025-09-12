@@ -1,6 +1,8 @@
 from abc import ABC, abstractmethod
 from typing import Dict, Any, List
 import copy
+import torch
+from utils.device_manager import device_manager
 """
 ABC (Abstract Base Class) 是 Python 中用于创建抽象基类的工具
 它的主要作用包括：
@@ -92,6 +94,34 @@ class BaseModel(ABC):
             self.optimizer = OptimizerFactory.create_optimizer(
                 model_parameters, default_config
             )
+    
+    def _ensure_device_compatibility(self, *tensors):
+        """确保张量在正确的设备上"""
+        device = self._get_model_device()
+        return device_manager.move_tensors_to_device(*tensors, device=device)
+    
+    def _get_model_device(self):
+        """
+        获取模型所在设备
+        
+        Returns:
+            模型所在设备
+        """
+        if hasattr(self, 'model') and hasattr(self.model, 'parameters'):
+            # 对于有 model 属性的模型
+            try:
+                return next(self.model.parameters()).device
+            except StopIteration:
+                return torch.device('cpu')
+        elif hasattr(self, 'parameters'):
+            # 对于直接继承 nn.Module 的模型
+            try:
+                return next(self.parameters()).device
+            except StopIteration:
+                return torch.device('cpu')
+        else:
+            # 默认返回 CPU
+            return torch.device('cpu')
     
     @abstractmethod
     def get_parameters(self) -> Dict[str, Any]:

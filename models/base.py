@@ -52,6 +52,9 @@ class SimpleLinearModel(BaseModel):
         self.model.train()
         self.optimizer.zero_grad()
         
+        # 使用基类的统一设备管理
+        data, labels = self._ensure_device_compatibility(data, labels)
+        
         # 前向传播
         outputs = self.model(data)
         loss = self.criterion(outputs, labels)
@@ -66,6 +69,8 @@ class SimpleLinearModel(BaseModel):
         """模型评估"""
         self.model.eval()
         with torch.no_grad():
+            # 使用基类的统一设备管理
+            data, labels = self._ensure_device_compatibility(data, labels)
             outputs = self.model(data)
             loss = self.criterion(outputs, labels)
             return {"loss": loss.item()}
@@ -78,14 +83,18 @@ class SimpleLinearModel(BaseModel):
         
         with torch.no_grad():
             for data, labels in dataloader:
+                # 使用基类的统一设备管理
+                data, labels = self._ensure_device_compatibility(data, labels)
+                
                 outputs = self.model(data)
                 loss = self.criterion(outputs, labels)
                 
-                # 累计损失
+                # 修正：使用样本数加权平均
                 total_loss += loss.item() * data.size(0)
                 total_samples += labels.size(0)
         
-        avg_loss = total_loss / total_samples
+        # 使用样本数加权平均
+        avg_loss = total_loss / total_samples if total_samples > 0 else 0.0
         return {"loss": avg_loss}
 
 
@@ -127,6 +136,9 @@ class SimpleClassificationModel(BaseModel):
         self.model.train()
         self.optimizer.zero_grad()
         
+        # 使用基类的统一设备管理
+        data, labels = self._ensure_device_compatibility(data, labels)
+        
         # 前向传播
         outputs = self.model(data)
         loss = self.criterion(outputs, labels)
@@ -141,6 +153,8 @@ class SimpleClassificationModel(BaseModel):
         """模型评估"""
         self.model.eval()
         with torch.no_grad():
+            # 使用基类的统一设备管理
+            data, labels = self._ensure_device_compatibility(data, labels)
             outputs = self.model(data)
             loss = self.criterion(outputs, labels)
             
@@ -161,10 +175,13 @@ class SimpleClassificationModel(BaseModel):
         
         with torch.no_grad():
             for data, labels in dataloader:
+                # 使用基类的统一设备管理
+                data, labels = self._ensure_device_compatibility(data, labels)
+                
                 outputs = self.model(data)
                 loss = self.criterion(outputs, labels)
                 
-                # 累计损失
+                # 修正：使用样本数加权平均
                 total_loss += loss.item() * data.size(0)
                 
                 # 计算准确率
@@ -172,7 +189,8 @@ class SimpleClassificationModel(BaseModel):
                 total_correct += (predicted == labels).sum().item()
                 total_samples += labels.size(0)
         
-        avg_loss = total_loss / total_samples
-        accuracy = total_correct / total_samples
+        # 使用样本数加权平均
+        avg_loss = total_loss / total_samples if total_samples > 0 else 0.0
+        accuracy = total_correct / total_samples if total_samples > 0 else 0.0
         
         return {"loss": avg_loss, "accuracy": accuracy}

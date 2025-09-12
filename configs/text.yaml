@@ -11,25 +11,19 @@ device: "auto"  # auto: 自动检测GPU, cuda: 强制GPU, cpu: 强制CPU
 
 # WandB配置
 wandb:
-  enabled: true
+  enabled: false
   project: "clip-federated-learning"
-  offline: true
+  offline: false
 
 # 客户端设置
 client:
-  num_clients: 4
+  num_clients: 1
   local_epochs: 2
   learning_rate: 0.00005
   
   # 客户端数据集配置 - 所有客户端使用CLIP数据集
   client_datasets:
     client_0:
-      - mnist
-    client_1:
-      - mnist
-    client_2:
-      - cifar10
-    client_3:
       - mnist
       - cifar10
 

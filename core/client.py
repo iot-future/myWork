@@ -2,6 +2,7 @@ import torch
 from typing import Dict, Any
 import copy
 from .base import BaseClient
+from utils.device_manager import device_manager
 
 
 class FederatedClient(BaseClient):
@@ -33,8 +34,9 @@ class FederatedClient(BaseClient):
         for epoch in range(self.epochs):
             for batch_data, batch_labels in self.data_loader:
                 # 将数据移到设备
-                batch_data = batch_data.to(self.device)
-                batch_labels = batch_labels.to(self.device)
+                batch_data, batch_labels = device_manager.move_tensors_to_device(
+                    batch_data, batch_labels, device=self.device
+                )
                 
                 loss = self.model.train_step(batch_data, batch_labels)
                 total_loss += loss * batch_data.size(0)
@@ -59,7 +61,11 @@ class FederatedClient(BaseClient):
         if self.data_loader is None:
             return {}
         
-        return self.model.evaluate_with_dataloader(self.data_loader)
+        try:
+            return self.model.evaluate_with_dataloader(self.data_loader)
+        except Exception as e:
+            print(f"⚠️  客户端 {self.client_id} 本地数据评估失败: {str(e)}")
+            return {}
     
     def set_data(self, data_loader):
         """设置数据加载器"""
@@ -67,4 +73,8 @@ class FederatedClient(BaseClient):
     
     def evaluate(self, test_data, test_labels):
         """评估客户端模型"""
-        return self.model.evaluate(test_data, test_labels)
+        try:
+            return self.model.evaluate(test_data, test_labels)
+        except Exception as e:
+            print(f"⚠️  客户端 {self.client_id} 模型评估失败: {str(e)}")
+            return {}

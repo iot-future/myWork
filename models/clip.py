@@ -16,6 +16,7 @@ from transformers import CLIPModel, CLIPProcessor, CLIPVisionModel, CLIPTextMode
 from transformers import AutoProcessor, AutoModel
 from PIL import Image
 from core.base import BaseModel
+from utils.device_manager import device_manager
 
 
 class ImageEncoder(torch.nn.Module):
@@ -55,8 +56,9 @@ class ImageEncoder(torch.nn.Module):
         # 获取特征维度
         self.feature_dim = self.vision_model.config.hidden_size
         
+        # 设置设备
         if device:
-            self.to(device)
+            device_manager.move_model_to_device(self, torch.device(device))
 
     def forward(self, images):
         """
@@ -71,9 +73,13 @@ class ImageEncoder(torch.nn.Module):
         # 如果输入是PIL图像列表，先进行预处理
         if isinstance(images, list) and isinstance(images[0], Image.Image):
             inputs = self.processor(images=images, return_tensors="pt", padding=True)
-            pixel_values = inputs['pixel_values'].to(self.vision_model.device)
+            pixel_values = device_manager.move_tensors_to_device(
+                inputs['pixel_values'], device=next(self.vision_model.parameters()).device
+            )
         elif isinstance(images, torch.Tensor):
-            pixel_values = images
+            pixel_values = device_manager.move_tensors_to_device(
+                images, device=next(self.vision_model.parameters()).device
+            )
         else:
             raise ValueError("Images must be either a list of PIL Images or a torch.Tensor")
             
@@ -157,7 +163,7 @@ class TextEncoder(torch.nn.Module):
         self.feature_dim = self.text_model.config.hidden_size
         
         if device:
-            self.to(device)
+            device_manager.move_model_to_device(self, torch.device(device))
 
     def forward(self, texts: Union[List[str], torch.Tensor]):
         """
@@ -172,8 +178,10 @@ class TextEncoder(torch.nn.Module):
         if isinstance(texts, list):
             # 文本预处理
             inputs = self.processor(text=texts, return_tensors="pt", padding=True, truncation=True)
-            input_ids = inputs['input_ids'].to(self.text_model.device)
-            attention_mask = inputs['attention_mask'].to(self.text_model.device)
+            input_ids, attention_mask = device_manager.move_tensors_to_device(
+                inputs['input_ids'], inputs['attention_mask'], 
+                device=next(self.text_model.parameters()).device
+            )
         elif isinstance(texts, torch.Tensor):
             input_ids = texts
             attention_mask = None
@@ -452,6 +460,12 @@ class CLIPModel(BaseModel):
         # 定义损失函数
         self.criterion = nn.CrossEntropyLoss()
         
+    def to(self, device):
+        """将模型移动到指定设备"""
+        device_manager.move_model_to_device(self.classifier, device)
+        device_manager.move_model_to_device(self.criterion, device)
+        return self
+        
     def get_parameters(self) -> Dict[str, torch.Tensor]:
         """
         获取模型参数 - 联邦学习核心功能
@@ -477,6 +491,21 @@ class CLIPModel(BaseModel):
                 if name in params and param.requires_grad:
                     param.data.copy_(params[name])
     
+    def _get_model_device(self):
+        """获取模型所在设备"""
+        if hasattr(self.classifier, 'parameters'):
+            try:
+                return next(self.classifier.parameters()).device
+            except StopIteration:
+                return torch.device('cpu')
+        elif hasattr(self.image_encoder, 'parameters'):
+            try:
+                return next(self.image_encoder.parameters()).device
+            except StopIteration:
+                return torch.device('cpu')
+        else:
+            return torch.device('cpu')
+    
     def train_step(self, data: torch.Tensor, labels: torch.Tensor) -> float:
         """
         单步训练
@@ -490,6 +519,14 @@ class CLIPModel(BaseModel):
         """
         self.classifier.train()
         self.optimizer.zero_grad()
+        
+        # 使用基类的统一设备管理（如果可用）
+        try:
+            data, labels = self._ensure_device_compatibility(data, labels)
+        except AttributeError:
+            # 如果基类方法不可用，使用设备管理器
+            device = self._get_model_device()
+            data, labels = device_manager.move_tensors_to_device(data, labels, device=device)
         
         # 前向传播
         outputs = self.classifier(data)
@@ -591,6 +628,68 @@ class CLIPModel(BaseModel):
         with torch.no_grad():
             features = self.image_encoder(data)
         return features
+    
+    def evaluate_with_dataloader(self, data_loader) -> Dict[str, float]:
+        """
+        使用数据加载器评估模型
+        
+        Args:
+            data_loader: 数据加载器
+            
+        Returns:
+            评估指标字典
+        """
+        self.classifier.eval()
+        
+        total_loss = 0.0
+        total_samples = 0
+        correct_predictions = 0
+        top5_correct = 0
+        
+        with torch.no_grad():
+            for batch_data, batch_labels in data_loader:
+                try:
+                    # 使用基类的统一设备管理
+                    batch_data, batch_labels = self._ensure_device_compatibility(batch_data, batch_labels)
+                except AttributeError:
+                    # 如果基类方法不可用，使用设备管理器
+                    device = self._get_model_device()
+                    batch_data, batch_labels = device_manager.move_tensors_to_device(
+                        batch_data, batch_labels, device=device
+                    )
+                
+                # 前向传播
+                outputs = self.classifier(batch_data)
+                loss = self.criterion(outputs, batch_labels)
+                
+                # 修正：使用样本数加权平均
+                total_loss += loss.item() * batch_data.size(0)
+                total_samples += batch_data.size(0)
+                
+                # 计算准确率
+                _, predicted = torch.max(outputs, 1)
+                correct_predictions += (predicted == batch_labels).sum().item()
+                
+                # 计算Top-5准确率（如果类别数>=5）
+                if self.num_classes >= 5:
+                    _, top5_pred = outputs.topk(5, 1, largest=True, sorted=True)
+                    top5_correct += top5_pred.eq(batch_labels.view(-1, 1).expand_as(top5_pred)).sum().item()
+        
+        # 计算平均指标，使用样本数加权平均
+        avg_loss = total_loss / total_samples if total_samples > 0 else 0.0
+        accuracy = correct_predictions / total_samples if total_samples > 0 else 0.0
+        
+        result = {
+            'loss': avg_loss,
+            'accuracy': accuracy
+        }
+        
+        # 添加Top-5准确率（如果适用）
+        if self.num_classes >= 5:
+            top5_accuracy = top5_correct / total_samples if total_samples > 0 else 0.0
+            result['top5_accuracy'] = top5_accuracy
+            
+        return result
     
     def save_model(self, filepath: str):
         """
