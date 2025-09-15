@@ -5,8 +5,12 @@ from typing import Dict, Any
 from core.base import BaseModel
 
 
-class CNNModel(BaseModel):
-    """CNN模型实现 - 适配224x224 RGB图像输入
+class FederatedCNNModel(BaseModel):
+    """联邦学习CNN模型包装器 - 适配224x224 RGB图像输入
+    
+    这是一个包装器类，将标准CNN模型适配到联邦学习框架中。
+    提供统一的参数管理、设备兼容、训练接口等联邦学习特性。
+    
     基于联邦学习经典架构，适配更大尺寸图像
     
     模型架构:
@@ -21,7 +25,7 @@ class CNNModel(BaseModel):
     
     def __init__(self, optimizer_config: Dict[str, Any] = None):
         """
-        初始化CNN模型
+        初始化联邦学习CNN模型包装器
         
         Args:
             optimizer_config: 优化器配置字典

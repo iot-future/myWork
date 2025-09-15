@@ -383,11 +383,13 @@ class ImageClassifier(torch.nn.Module):
         return cls(image_encoder, classification_head)
 
 
-class CLIPModel(BaseModel):
-    """
-    完整的CLIP模型实现
-    继承自BaseModel，适配联邦学习框架
-    支持图像分类任务
+class FederatedCLIPModel(BaseModel):
+    """联邦学习CLIP模型包装器
+    
+    这是一个包装器类，将CLIP多模态模型适配到联邦学习框架中。
+    提供统一的参数管理、设备兼容、训练接口等联邦学习特性。
+    
+    完整的CLIP模型实现，继承自BaseModel，适配联邦学习框架，支持图像分类任务。
     """
     def __init__(self, 
                  model_name: str = "openai/clip-vit-base-patch32",
@@ -398,7 +400,7 @@ class CLIPModel(BaseModel):
                  optimizer_config: Optional[Dict[str, Any]] = None,
                  checkpoint_path: Optional[str] = None):
         """
-        初始化CLIP模型
+        初始化联邦学习CLIP模型包装器
         
         Args:
             model_name: 预训练模型名称
@@ -775,9 +777,9 @@ class CLIPModel(BaseModel):
 
 
 # 统一的工厂函数，支持从配置或checkpoint创建CLIP模型
-def create_clip_model(config: Dict[str, Any]) -> CLIPModel:
+def create_clip_model(config: Dict[str, Any]) -> FederatedCLIPModel:
     """
-    创建CLIP模型的统一工厂函数
+    创建联邦学习CLIP模型的统一工厂函数
     
     Args:
         config: 模型配置字典，可以包含以下键：
@@ -790,15 +792,15 @@ def create_clip_model(config: Dict[str, Any]) -> CLIPModel:
             - checkpoint_path: 如果提供，将从此路径加载模型权重
         
     Returns:
-        CLIP模型实例
+        联邦学习CLIP模型实例
     """
     # 如果提供了checkpoint路径，优先使用from_checkpoint方法
     if 'checkpoint_path' in config and config['checkpoint_path'] is not None:
         checkpoint_path = config.pop('checkpoint_path')
-        return CLIPModel.from_checkpoint(checkpoint_path, **config)
+        return FederatedCLIPModel.from_checkpoint(checkpoint_path, **config)
     
     # 否则直接创建新模型
-    return CLIPModel(
+    return FederatedCLIPModel(
         model_name=config.get('model_name', 'openai/clip-vit-base-patch32'),
         num_classes=config.get('num_classes', 10),
         normalize_features=config.get('normalize_features', True),

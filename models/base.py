@@ -5,12 +5,16 @@ from typing import Dict, Any
 from core.base import BaseModel
 
 
-class SimpleLinearModel(BaseModel):
-    """简单线性模型实现"""
+class FederatedLinearModel(BaseModel):
+    """联邦学习线性模型包装器
+    
+    这是一个包装器类，将简单线性模型适配到联邦学习框架中。
+    提供统一的参数管理、设备兼容、训练接口等联邦学习特性。
+    """
     
     def __init__(self, input_dim: int, output_dim: int, optimizer_config: Dict[str, Any] = None):
         """
-        初始化线性模型
+        初始化联邦学习线性模型包装器
         
         Args:
             input_dim: 输入维度
@@ -98,10 +102,22 @@ class SimpleLinearModel(BaseModel):
         return {"loss": avg_loss}
 
 
-class SimpleClassificationModel(BaseModel):
-    """简单分类模型实现"""
+class FederatedClassificationModel(BaseModel):
+    """联邦学习分类模型包装器
+    
+    这是一个包装器类，将简单分类模型适配到联邦学习框架中。
+    提供统一的参数管理、设备兼容、训练接口等联邦学习特性。
+    """
     
     def __init__(self, input_dim: int, num_classes: int, learning_rate: float = 0.01):
+        """
+        初始化联邦学习分类模型包装器
+        
+        Args:
+            input_dim: 输入维度
+            num_classes: 分类类别数
+            learning_rate: 学习率
+        """
         self.input_dim = input_dim
         self.num_classes = num_classes
         self.learning_rate = learning_rate
