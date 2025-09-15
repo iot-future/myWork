@@ -48,14 +48,29 @@ class DeviceManager:
         return device
     
     
-    def move_model_to_device(self, model: torch.nn.Module, device: Optional[torch.device] = None) -> torch.nn.Module:
+    def move_model_to_device(self, model, device: Optional[torch.device] = None):
         """将模型移动到指定设备"""
         target_device = device or self._current_device or self.get_optimal_device()
         
         try:
-            return model.to(target_device)
+            # 检查是否是 BaseModel 实例
+            if hasattr(model, 'model') and hasattr(model.model, 'to'):
+                # 对于 BaseModel，移动内部的 model
+                model.model = model.model.to(target_device)
+                return model
+            elif hasattr(model, 'to'):
+                # 对于普通的 nn.Module
+                return model.to(target_device)
+            else:
+                # 如果对象没有 to 方法，尝试移动到 CPU 作为回退
+                if hasattr(model, 'model') and hasattr(model.model, 'to'):
+                    model.model = model.model.to('cpu')
+                return model
         except Exception:
-            return model.to('cpu')
+            # 发生异常时的回退处理
+            if hasattr(model, 'model') and hasattr(model.model, 'to'):
+                model.model = model.model.to('cpu')
+            return model
     
     def move_tensors_to_device(self, *tensors: torch.Tensor, device: Optional[torch.device] = None) -> Union[torch.Tensor, Tuple[torch.Tensor, ...]]:
         """将张量移动到指定设备"""
@@ -89,7 +104,7 @@ def get_device(preference: str = 'auto') -> torch.device:
 
 def to_device(obj, device: Optional[torch.device] = None):
     """将对象移动到设备的便捷函数"""
-    if isinstance(obj, torch.nn.Module):
+    if isinstance(obj, torch.nn.Module) or hasattr(obj, 'model'):
         return device_manager.move_model_to_device(obj, device)
     elif isinstance(obj, torch.Tensor):
         return device_manager.move_tensors_to_device(obj, device=device)
