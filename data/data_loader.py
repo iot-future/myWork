@@ -12,13 +12,14 @@ data 模块的核心接口。
 from typing import Any, Dict, List, Tuple, Union
 import torch
 from torch.utils.data import DataLoader, Dataset, Subset
-from data.datasets import mnist, cifar10
+from data.datasets import mnist, cifar10, cifar100
 from data.middleware import create_unified_dataloader
 
 # 支持的数据集名称到其对应类的映射
 SUPPORTED_DATASETS = {
     'mnist': mnist.MNIST,
-    'cifar10': cifar10.CIFAR10
+    'cifar10': cifar10.CIFAR10,
+    'cifar100': cifar100.CIFAR100
 }
 
 

@@ -23,11 +23,16 @@ wandb:
   offline: true
 
 client:
-  num_clients: 1
+  num_clients: 3
   local_epochs: 2
   
   client_datasets:
-    client_0: [cifar10]
+    client_0:
+      - cifar100                              # 客户端0：仅MNIST
+    client_1:
+      - mnist                              # 客户端1：仅MNIST
+    client_2:
+      - cifar10    
 
 server:
   aggregation_method: "federated_avg"
@@ -58,9 +63,8 @@ data:
   
   datasets:
     mnist:
-      train: true
     cifar10:
-      train: true
+    cifar100:
 
 evaluation:
   evaluate_every: 1

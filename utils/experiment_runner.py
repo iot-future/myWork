@@ -106,7 +106,7 @@ class ExperimentRunner:
 
         # 获取每个数据集的路径等基本信息
         base_dataset_configs = {
-            dataset_name: {'data_root': data_root, **dataset_config}
+            dataset_name: {'data_root': data_root} if dataset_config is None else {'data_root': data_root, **dataset_config}
             for dataset_name, dataset_config in data_config['datasets'].items()
         }
 
