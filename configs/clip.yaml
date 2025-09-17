@@ -15,6 +15,15 @@ experiment:
 device: "auto"  # auto: 自动检测GPU, cuda: 强制GPU, cpu: 强制CPU
 
 # ==============================
+# 学习率配置 - 统一管理所有学习率设置
+# ==============================
+learning_rates:
+  client: 0.00005                          # CLIP客户端学习率（较小）
+  server: 1.0                              # 服务器聚合学习率
+  model: 0.00005                           # CLIP模型训练学习率
+  optimizer: 5e-5                          # CLIP优化器学习率
+
+# ==============================
 # 分布式训练和日志配置
 # ==============================
 wandb:
@@ -28,7 +37,6 @@ wandb:
 client:
   num_clients: 4                           # 客户端数量
   local_epochs: 2                          # CLIP训练使用较少的本地轮数
-  learning_rate: 0.00005                   # CLIP使用较小的学习率
   
   # 客户端数据集分配 - 支持多模态数据
   client_datasets:
@@ -47,14 +55,14 @@ client:
 # ==============================
 server:
   aggregation_method: "federated_avg"      # FedAvg算法
-  server_learning_rate: 1.0                # 服务器学习率
+  # server_learning_rate: 使用 learning_rates.server 配置
 
 # ==============================
 # 模型配置
 # ==============================
 model:
   type: "clip"                             # CLIP模型类型
-  learning_rate: 0.00005                   # CLIP模型学习率
+  # learning_rate: 使用 learning_rates.model 配置
   
   # Hugging Face模型配置
   model_name: "openai/clip-vit-base-patch32"  # 预训练模型名称
@@ -88,7 +96,7 @@ model:
 # ==============================
 optimizer:
   type: "adamw"                            # 优化器类型
-  learning_rate: 5e-5                      # CLIP专用学习率
+  # learning_rate: 使用 learning_rates.optimizer 配置
   weight_decay: 0.1                        # CLIP使用较大的权重衰减
   betas: [0.9, 0.98]                      # CLIP优化的beta参数
   eps: 1e-8                               # 数值稳定性参数

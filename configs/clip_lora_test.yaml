@@ -8,6 +8,15 @@ experiment:
 
 device: "auto"
 
+# ==============================
+# 学习率配置 - 统一管理所有学习率设置
+# ==============================
+learning_rates:
+  client: 0.00005                          # CLIP LoRA客户端学习率
+  server: 1.0                              # 服务器聚合学习率
+  model: 0.00005                           # CLIP LoRA模型训练学习率
+  optimizer: 5e-5                          # CLIP LoRA优化器学习率
+
 wandb:
   enabled: true
   project: "clip-lora-federated-learning"
@@ -16,18 +25,15 @@ wandb:
 client:
   num_clients: 1
   local_epochs: 2
-  learning_rate: 0.00005     
   
   client_datasets:
     client_0: [cifar10]
 
 server:
   aggregation_method: "federated_avg"
-  server_learning_rate: 1.0
 
 model:
   type: "clip"
-  learning_rate: 0.00005   
   model_name: "openai/clip-vit-base-patch32"
   cache_dir: "/home/zzm/checkpoint"
   use_pretrained: true
@@ -42,7 +48,6 @@ model:
 
 optimizer:
   type: "adamw"
-  learning_rate:  5e-5  
   weight_decay: 0.01
   betas: [0.9, 0.98]      
 

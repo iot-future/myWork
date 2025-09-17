@@ -8,6 +8,7 @@ import random
 import numpy as np
 import torch
 import time
+import sys
 from typing import Dict, Any, List
 from torch.utils.data import DataLoader, ConcatDataset
 from tqdm import tqdm
@@ -294,7 +295,7 @@ class ExperimentRunner:
         
         with tqdm(self.clients, desc=f"第{round_num}轮训练", 
                   bar_format="{desc}: {percentage:3.0f}%|{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]",
-                  ncols=70, leave=False, position=0) as pbar:
+                  ncols=None, leave=False, position=1, file=sys.stdout) as pbar:
             
             for i, client in enumerate(pbar):
                 # 传递show_progress参数以启用batch级别的进度条
@@ -304,6 +305,9 @@ class ExperimentRunner:
                 # 简化的进度信息
                 loss = client_result.get('metrics', {}).get('loss', 0)
                 pbar.set_postfix({'Loss': f'{loss:.3f}'})
+                
+                # 刷新显示以避免重叠
+                pbar.refresh()
 
                 # 记录客户端指标到wandb
                 if self.use_wandb and 'metrics' in client_result:
@@ -381,7 +385,8 @@ class ExperimentRunner:
             print(f"🔄 LoRA训练模式: {lora_param_count} 个LoRA参数层将被优化")
 
         # 使用总体进度条
-        with tqdm(range(1, rounds + 1), desc="实验进度", unit="轮") as round_pbar:
+        with tqdm(range(1, rounds + 1), desc="实验进度", unit="轮", 
+                  position=0, file=sys.stdout, ncols=None) as round_pbar:
             for round_num in round_pbar:
                 metrics = self.run_federated_round(round_num)
                 if metrics:

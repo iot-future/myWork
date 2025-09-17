@@ -43,8 +43,10 @@ class FederatedClient(BaseClient):
                 desc=f"  {self.client_id} 训练",
                 unit="batch",
                 leave=False,
-                ncols=80,
-                position=1
+                ncols=None,  # 自适应终端宽度
+                position=2,
+                file=sys.stdout,
+                bar_format="{desc}: {percentage:3.0f}%|{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]"
             )
         
         for epoch in range(self.epochs):
@@ -66,10 +68,14 @@ class FederatedClient(BaseClient):
                         'Loss': f'{avg_loss:.4f}'
                     })
                     batch_pbar.update(1)
+                    batch_pbar.refresh()  # 刷新显示
         
         # 关闭batch进度条
         if show_progress:
             batch_pbar.close()
+            # 确保进度条完全清除
+            import time
+            time.sleep(0.01)
         
         # 计算平均损失
         avg_loss = total_loss / total_samples if total_samples > 0 else 0.0

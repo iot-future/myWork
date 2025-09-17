@@ -15,6 +15,15 @@ experiment:
 device: "auto"  # auto: 自动检测GPU, cuda: 强制GPU, cpu: 强制CPU
 
 # ==============================
+# 学习率配置 - 统一管理所有学习率设置
+# ==============================
+learning_rates:
+  client: 0.001                            # 客户端学习率
+  server: 1.0                              # 服务器聚合学习率
+  model: 0.001                             # 模型训练学习率
+  optimizer: 0.001                         # 优化器学习率
+
+# ==============================
 # 分布式训练和日志配置
 # ==============================
 wandb:
@@ -28,7 +37,7 @@ wandb:
 client:
   num_clients: 5                           # 根据实验需要调整客户端数量
   local_epochs: 3                          # 本地训练轮数
-  learning_rate: 0.001                     # 客户端学习率
+  # learning_rate: 使用 learning_rates.client 配置
   
   # 客户端数据集分配 - 根据需要修改
   client_datasets:
@@ -49,14 +58,14 @@ client:
 # ==============================
 server:
   aggregation_method: "federated_avg"      # 聚合算法
-  server_learning_rate: 1.0                # 服务器学习率
+  # server_learning_rate: 使用 learning_rates.server 配置
 
 # ==============================
 # 模型配置
 # ==============================
 model:
   type: "cnn"                              # 模型类型: cnn, linear, clip
-  learning_rate: 0.001                     # 模型学习率（与client保持一致）
+  # learning_rate: 使用 learning_rates.model 配置
   
   # 如果使用CLIP模型，取消下面的注释并配置
   # model_name: "openai/clip-vit-base-patch32"
@@ -71,7 +80,7 @@ model:
 # ==============================
 optimizer:
   type: "adamw"                            # 优化器类型
-  learning_rate: 0.001                     # 学习率（与上面保持一致）
+  # learning_rate: 使用 learning_rates.optimizer 配置
   weight_decay: 0.01                       # 权重衰减
   betas: [0.9, 0.999]                     # Adam beta参数
   eps: 1e-8                               # 数值稳定性参数
