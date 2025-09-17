@@ -209,6 +209,13 @@ class ExperimentRunner:
 
         # 将模型移到设备
         global_model = device_manager.move_model_to_device(global_model, self.device)
+        
+        # 添加LoRA状态验证
+        if hasattr(global_model, 'is_lora_enabled') and global_model.is_lora_enabled():
+            lora_info = global_model.get_lora_info()
+            print(f"🎯 全局模型LoRA状态: 已启用 | 可训练参数: {lora_info.get('trainable_parameters', 0):,}")
+        elif hasattr(global_model, 'is_lora_enabled'):
+            print("📸 全局模型: 标准微调模式")
 
         # 创建聚合器和服务器
         aggregator = FederatedAveraging()
@@ -219,8 +226,12 @@ class ExperimentRunner:
         """设置客户端"""
         client_config = self.config['client']
         optimizer_config = self.config.get('optimizer', {})
+        
+        print(f"\n🔧 开始设置 {len(client_data_loaders)} 个客户端...")
 
         self.clients = []
+        lora_clients_count = 0
+        
         for i, dataloaders_dict in enumerate(client_data_loaders):
             client_id = f"client_{i}"
             client_model = ModelFactory.create_model(
@@ -230,6 +241,10 @@ class ExperimentRunner:
 
             # 将客户端模型移到设备
             client_model = device_manager.move_model_to_device(client_model, self.device)
+            
+            # 统计LoRA启用的客户端数量
+            if hasattr(client_model, 'is_lora_enabled') and client_model.is_lora_enabled():
+                lora_clients_count += 1
 
             # 处理数据加载器：单数据集或多数据集
             data_loader = (list(dataloaders_dict.values())[0] if len(dataloaders_dict) == 1
@@ -246,6 +261,8 @@ class ExperimentRunner:
             self.clients.append(client)
 
         print(f"✓ 客户端设置完成: {len(self.clients)} 个客户端")
+        if lora_clients_count > 0:
+            print(f"🎯 LoRA启用客户端: {lora_clients_count}/{len(self.clients)}")
 
     def _create_combined_dataloader(self, dataloaders_dict):
         """创建联合数据加载器，将多个数据集合并为一个数据加载器"""
@@ -269,15 +286,19 @@ class ExperimentRunner:
         # 获取全局模型参数
         global_params = self.server.send_global_model()
 
-        # 所有客户端进行本地训练 - 使用简洁的进度条
+        # 所有客户端进行本地训练 - 使用嵌套的进度条
         client_updates = []
+        
+        # 检查是否显示详细进度（batch级别）
+        show_batch_progress = self.config.get('training', {}).get('show_batch_progress', True)
         
         with tqdm(self.clients, desc=f"第{round_num}轮训练", 
                   bar_format="{desc}: {percentage:3.0f}%|{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]",
-                  ncols=70, leave=False) as pbar:
+                  ncols=70, leave=False, position=0) as pbar:
             
             for i, client in enumerate(pbar):
-                client_result = client.train(global_params)
+                # 传递show_progress参数以启用batch级别的进度条
+                client_result = client.train(global_params, show_progress=show_batch_progress)
                 client_updates.append(client_result)
                 
                 # 简化的进度信息
@@ -351,6 +372,13 @@ class ExperimentRunner:
         rounds = self.config['experiment']['rounds']
         all_metrics = []
         self.experiment_start_time = time.time()
+        
+        # 在训练开始前记录LoRA参数状态（如果启用）
+        lora_enabled = hasattr(self.server.global_model, 'is_lora_enabled') and self.server.global_model.is_lora_enabled()
+        if lora_enabled:
+            initial_lora_params = self.server.global_model.get_parameters()
+            lora_param_count = len([k for k in initial_lora_params.keys() if 'lora_' in k])
+            print(f"🔄 LoRA训练模式: {lora_param_count} 个LoRA参数层将被优化")
 
         # 使用总体进度条
         with tqdm(range(1, rounds + 1), desc="实验进度", unit="轮") as round_pbar:
@@ -363,6 +391,12 @@ class ExperimentRunner:
                 # 更新总体进度条
                 if metrics and 'accuracy' in metrics:
                     round_pbar.set_postfix({'Acc': f"{metrics['accuracy']:.2f}%"})
+                
+                # 在最后一轮验证LoRA参数更新
+                if lora_enabled and round_num == rounds:
+                    current_lora_params = self.server.global_model.get_parameters()
+                    lora_keys = [k for k in current_lora_params.keys() if 'lora_' in k]
+                    print(f"✅ LoRA训练完成: {len(lora_keys)} 个参数层已优化")
 
         # 打印最终总结
         self._print_final_summary()

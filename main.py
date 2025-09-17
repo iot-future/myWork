@@ -29,6 +29,15 @@ def main():
     print(f"实验名称: {config['experiment']['name']}")
     print(f"训练轮次: {config['experiment']['rounds']} | 客户端数量: {config['client']['num_clients']} | 本地训练轮次: {config['client']['local_epochs']}")
     print(f"优化器: AdamW (统一使用)")
+    
+    # 显示LoRA配置信息
+    model_config = config.get('model', {})
+    lora_config = model_config.get('lora', {})
+    if lora_config.get('enabled', False):
+        print(f"🎯 LoRA微调: 启用 (r={lora_config.get('r', 16)}, alpha={lora_config.get('lora_alpha', 32)})")
+    else:
+        print(f"📸 训练模式: 标准微调")
+    
     data_info = f"批大小: {config['data']['batch_size']}"
     if config.get('wandb', {}).get('enabled', False):
         data_info += f" | WandB项目: {config['wandb']['project']}"

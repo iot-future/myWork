@@ -3,6 +3,7 @@ from typing import Dict, Any
 import copy
 from .base import BaseClient
 from utils.device_manager import device_manager
+from tqdm import tqdm
 import sys
 
 
@@ -32,9 +33,19 @@ class FederatedClient(BaseClient):
         total_loss = 0.0
         total_samples = 0
         
-        # 添加简单的进度反馈
+        # 计算总的batch数量
         total_batches = len(self.data_loader) * self.epochs
-        batch_count = 0
+        
+        # 创建batch级别的进度条
+        if show_progress:
+            batch_pbar = tqdm(
+                total=total_batches,
+                desc=f"  {self.client_id} 训练",
+                unit="batch",
+                leave=False,
+                ncols=80,
+                position=1
+            )
         
         for epoch in range(self.epochs):
             for batch_data, batch_labels in self.data_loader:
@@ -47,16 +58,18 @@ class FederatedClient(BaseClient):
                 total_loss += loss * batch_data.size(0)
                 total_samples += batch_data.size(0)
                 
-                # 简单的进度输出（避免干扰主进度条）
-                batch_count += 1
-                if show_progress and batch_count % max(1, total_batches // 4) == 0:
-                    progress = batch_count / total_batches * 100
-                    print(f"\r    {self.client_id}: {progress:.0f}%", end='', flush=True)
+                # 更新batch进度条
+                if show_progress:
+                    avg_loss = total_loss / total_samples if total_samples > 0 else 0.0
+                    batch_pbar.set_postfix({
+                        'Epoch': f'{epoch + 1}/{self.epochs}',
+                        'Loss': f'{avg_loss:.4f}'
+                    })
+                    batch_pbar.update(1)
         
-        # 清除进度输出
+        # 关闭batch进度条
         if show_progress:
-            print(f"\r    {self.client_id}: 完成", end='', flush=True)
-            sys.stdout.write('\r' + ' ' * 20 + '\r')  # 清除行
+            batch_pbar.close()
         
         # 计算平均损失
         avg_loss = total_loss / total_samples if total_samples > 0 else 0.0

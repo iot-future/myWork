@@ -4,9 +4,9 @@
 """
 
 from typing import Dict, Any, Optional
-from models.cnn import CNNModel
-from models.base import SimpleLinearModel
-from models.clip import CLIPModel
+from models.cnn import FederatedCNNModel
+from models.base import FederatedLinearModel
+from models.clip import FederatedCLIPModel
 
 
 class ModelFactory:
@@ -27,25 +27,31 @@ class ModelFactory:
         model_type = model_config['type']
         
         if model_type == 'cnn':
-            return CNNModel(optimizer_config=optimizer_config)
+            return FederatedCNNModel(optimizer_config=optimizer_config)
         elif model_type == 'linear':
             # 线性模型需要额外的维度参数
             input_dim = model_config.get('input_dim', 784)  # MNIST默认28*28
             output_dim = model_config.get('output_dim', 10)  # 10个类别
-            return SimpleLinearModel(
+            return FederatedLinearModel(
                 input_dim=input_dim, 
                 output_dim=output_dim,
                 optimizer_config=optimizer_config
             )
         elif model_type == 'clip':
+            # 检查是否启用LoRA
+            lora_config = model_config.get('lora', {})
+            if lora_config.get('enabled', False):
+                print(f"🔬 CLIP模型启用LoRA微调 (r={lora_config.get('r', 16)})")
+            
             # 基于Hugging Face的CLIP模型
-            return CLIPModel(
+            return FederatedCLIPModel(
                 model_name=model_config.get('model_name', 'openai/clip-vit-base-patch32'),
                 num_classes=model_config.get('num_classes', 10),
                 normalize_features=model_config.get('normalize_features', True),
                 freeze_encoder=model_config.get('freeze_vision_encoder', False),
                 cache_dir=model_config.get('cache_dir', None),
-                optimizer_config=optimizer_config
+                optimizer_config=optimizer_config,
+                lora_config=lora_config if lora_config.get('enabled', False) else None
             )
         else:
             raise ValueError(f"不支持的模型类型: {model_type}")

@@ -66,6 +66,14 @@ model:
   freeze_vision_encoder: false             # 是否冻结视觉编码器
   freeze_text_encoder: false               # 是否冻结文本编码器
   
+  # LoRA微调配置（默认关闭）
+  lora:
+    enabled: false                         # 是否启用LoRA微调
+    r: 16                                  # LoRA rank
+    lora_alpha: 32                         # LoRA scaling参数
+    lora_dropout: 0.1                      # LoRA dropout概率
+    target_modules: ["q_proj", "v_proj", "k_proj", "out_proj"]
+  
   # 图像编码器配置
   image_encoder:
     feature_dim: 768                       # ViT-B/32的特征维度
@@ -90,7 +98,7 @@ optimizer:
 # ==============================
 data:
   data_dir: "/home/zzm/dataset/"           # 数据集根目录
-  batch_size: 16                           # 较小批次，适合CLIP大模型
+  batch_size: 32                           # 较小批次，适合CLIP大模型
   num_workers: 2                           # 数据加载器工作进程数
   
   # 具体数据集配置
@@ -116,7 +124,7 @@ data:
 # ==============================
 evaluation:
   evaluate_every: 1                        # 每轮都评估
-  test_batch_size: 32                      # 测试批次大小
+  test_batch_size: 64                      # 测试批次大小
   metrics:                                 # 评估指标
     - "loss"
     - "accuracy"

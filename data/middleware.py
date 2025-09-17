@@ -162,9 +162,6 @@ class UnifiedDataset(Dataset):
         return image
 
 
-# ProcessedDataLoader 类已被移除，直接使用普通的 DataLoader
-
-
 # 主要对外接口
 def create_unified_dataloader(dataloader: DataLoader,
                               dataset_name: str,

@@ -18,6 +18,14 @@ from PIL import Image
 from core.base import BaseModel
 from utils.device_manager import device_manager
 
+# LoRA相关导入
+try:
+    from lora.clip_lora import CLIPLoRAWrapper
+    LORA_AVAILABLE = True
+except ImportError:
+    LORA_AVAILABLE = False
+    print("Warning: LoRA functionality not available. Please install required dependencies.")
+
 
 class ImageEncoder(torch.nn.Module):
     """
@@ -56,9 +64,29 @@ class ImageEncoder(torch.nn.Module):
         # 获取特征维度
         self.feature_dim = self.vision_model.config.hidden_size
         
+        # 设备缓存优化
+        self._device_cache = None
+        self._device_cache_dirty = True
+        
         # 设置设备
         if device:
             device_manager.move_model_to_device(self, torch.device(device))
+
+    def _get_device(self):
+        """获取模型设备 - 带缓存优化"""
+        if self._device_cache is None or self._device_cache_dirty:
+            try:
+                self._device_cache = next(self.vision_model.parameters()).device
+                self._device_cache_dirty = False
+            except StopIteration:
+                self._device_cache = torch.device('cpu')
+        return self._device_cache
+
+    def to(self, device):
+        """移动模型到指定设备并标记缓存失效"""
+        result = super().to(device)
+        self._device_cache_dirty = True
+        return result
 
     def forward(self, images):
         """
@@ -70,16 +98,15 @@ class ImageEncoder(torch.nn.Module):
         Returns:
             编码后的图像特征向量
         """
+        # 获取设备（带缓存优化）
+        device = self._get_device()
+        
         # 如果输入是PIL图像列表，先进行预处理
         if isinstance(images, list) and isinstance(images[0], Image.Image):
             inputs = self.processor(images=images, return_tensors="pt", padding=True)
-            pixel_values = device_manager.move_tensors_to_device(
-                inputs['pixel_values'], device=next(self.vision_model.parameters()).device
-            )
+            pixel_values = device_manager.move_tensors_to_device(inputs['pixel_values'], device=device)
         elif isinstance(images, torch.Tensor):
-            pixel_values = device_manager.move_tensors_to_device(
-                images, device=next(self.vision_model.parameters()).device
-            )
+            pixel_values = device_manager.move_tensors_to_device(images, device=device)
         else:
             raise ValueError("Images must be either a list of PIL Images or a torch.Tensor")
             
@@ -162,8 +189,28 @@ class TextEncoder(torch.nn.Module):
         # 获取特征维度
         self.feature_dim = self.text_model.config.hidden_size
         
+        # 设备缓存优化
+        self._device_cache = None
+        self._device_cache_dirty = True
+        
         if device:
             device_manager.move_model_to_device(self, torch.device(device))
+
+    def _get_device(self):
+        """获取模型设备 - 带缓存优化"""
+        if self._device_cache is None or self._device_cache_dirty:
+            try:
+                self._device_cache = next(self.text_model.parameters()).device
+                self._device_cache_dirty = False
+            except StopIteration:
+                self._device_cache = torch.device('cpu')
+        return self._device_cache
+
+    def to(self, device):
+        """移动模型到指定设备并标记缓存失效"""
+        result = super().to(device)
+        self._device_cache_dirty = True
+        return result
 
     def forward(self, texts: Union[List[str], torch.Tensor]):
         """
@@ -175,12 +222,14 @@ class TextEncoder(torch.nn.Module):
         Returns:
             编码后的文本特征向量
         """
+        # 获取设备（带缓存优化）
+        device = self._get_device()
+        
         if isinstance(texts, list):
             # 文本预处理
             inputs = self.processor(text=texts, return_tensors="pt", padding=True, truncation=True)
             input_ids, attention_mask = device_manager.move_tensors_to_device(
-                inputs['input_ids'], inputs['attention_mask'], 
-                device=next(self.text_model.parameters()).device
+                inputs['input_ids'], inputs['attention_mask'], device=device
             )
         elif isinstance(texts, torch.Tensor):
             input_ids = texts
@@ -398,7 +447,8 @@ class FederatedCLIPModel(BaseModel):
                  freeze_encoder: bool = False,
                  cache_dir: Optional[str] = None,
                  optimizer_config: Optional[Dict[str, Any]] = None,
-                 checkpoint_path: Optional[str] = None):
+                 checkpoint_path: Optional[str] = None,
+                 lora_config: Optional[Dict[str, Any]] = None):
         """
         初始化联邦学习CLIP模型包装器
         
@@ -410,6 +460,7 @@ class FederatedCLIPModel(BaseModel):
             cache_dir: 模型缓存目录
             optimizer_config: 优化器配置
             checkpoint_path: 如果提供，将从此路径加载预训练权重
+            lora_config: LoRA配置，包含enabled、r、lora_alpha等参数
         """
         # 调用父类构造函数
         super().__init__(optimizer_config)
@@ -418,6 +469,7 @@ class FederatedCLIPModel(BaseModel):
         self.num_classes = num_classes
         self.normalize_features = normalize_features
         self.cache_dir = cache_dir
+        self.lora_config = lora_config or {}
         
         # 创建图像编码器
         self.image_encoder = ImageEncoder(
@@ -434,6 +486,18 @@ class FederatedCLIPModel(BaseModel):
         
         # 组合成完整的分类器
         self.classifier = ImageClassifier(self.image_encoder, self.classification_head)
+        
+        # 初始化LoRA包装器
+        self.lora_wrapper = None
+        self._lora_enabled = False
+        
+        # 设备缓存优化
+        self._device_cache = None
+        self._device_cache_dirty = True
+        
+        # 应用LoRA（如果配置中启用）
+        if self.lora_config.get('enabled', False) and LORA_AVAILABLE:
+            self._setup_lora()
         
         # 如果需要冻结编码器
         if freeze_encoder:
@@ -461,25 +525,79 @@ class FederatedCLIPModel(BaseModel):
         
         # 定义损失函数
         self.criterion = nn.CrossEntropyLoss()
+    
+    def _setup_lora(self):
+        """设置LoRA微调"""
+        if not LORA_AVAILABLE:
+            print("⚠️  警告: LoRA功能不可用，请安装所需依赖")
+            return
+        
+        try:
+            # 创建LoRA包装器
+            self.lora_wrapper = CLIPLoRAWrapper(vision_model=self.image_encoder.vision_model)
+            
+            # 简化配置处理
+            vision_config = {
+                'r': self.lora_config.get('r', 16),
+                'lora_alpha': self.lora_config.get('lora_alpha', 32),
+                'lora_dropout': self.lora_config.get('lora_dropout', 0.1),
+                'target_modules': self.lora_config.get('target_modules', ["q_proj", "v_proj", "k_proj", "out_proj"])
+            }
+            
+            # 应用LoRA
+            self.lora_wrapper.apply_lora(vision_config=vision_config)
+            self._lora_enabled = True
+            
+            # 输出关键的LoRA统计信息
+            trainable_params = self.lora_wrapper.get_trainable_parameters()
+            total_original_params = sum(p.numel() for p in self.image_encoder.vision_model.parameters())
+            
+            print(f"🎯 LoRA设置完成 | 参数效率: {(trainable_params/total_original_params)*100:.2f}% ({trainable_params:,}/{total_original_params:,})")
+                
+        except Exception as e:
+            print(f"❌ LoRA设置失败: {e}")
+            self.lora_wrapper = None
+            self._lora_enabled = False
         
     def to(self, device):
         """将模型移动到指定设备"""
         device_manager.move_model_to_device(self.classifier, device)
         device_manager.move_model_to_device(self.criterion, device)
+        # 设备发生变化时，标记缓存失效
+        self._device_cache_dirty = True
         return self
         
     def get_parameters(self) -> Dict[str, torch.Tensor]:
         """
         获取模型参数 - 联邦学习核心功能
         
+        当启用LoRA时，只返回LoRA参数和分类头参数
+        当未启用LoRA时，返回所有可训练参数
+        
         Returns:
             参数名称到参数张量的映射
         """
-        return {
-            name: param.data.clone()
-            for name, param in self.classifier.named_parameters()
-            if param.requires_grad
-        }
+        if self._lora_enabled and self.lora_wrapper is not None:
+            # 获取LoRA参数
+            lora_params = self.lora_wrapper.get_lora_parameters()
+            
+            # 获取分类头参数
+            classifier_params = {
+                f"classifier.{name}": param.data.clone()
+                for name, param in self.classification_head.named_parameters()
+                if param.requires_grad
+            }
+            
+            # 合并LoRA参数和分类头参数
+            all_params = {**lora_params, **classifier_params}
+            return all_params
+        else:
+            # 标准模式：返回所有可训练参数
+            return {
+                name: param.data.clone()
+                for name, param in self.classifier.named_parameters()
+                if param.requires_grad
+            }
     
     def set_parameters(self, params: Dict[str, torch.Tensor]):
         """
@@ -488,25 +606,52 @@ class FederatedCLIPModel(BaseModel):
         Args:
             params: 参数名称到参数张量的映射
         """
-        with torch.no_grad():
-            for name, param in self.classifier.named_parameters():
-                if name in params and param.requires_grad:
-                    param.data.copy_(params[name])
+        if self._lora_enabled and self.lora_wrapper is not None:
+            # 分离LoRA参数和分类头参数
+            lora_params = {}
+            classifier_params = {}
+            
+            for name, param in params.items():
+                if name.startswith("vision.") or name.startswith("text."):
+                    lora_params[name] = param
+                elif name.startswith("classifier."):
+                    classifier_params[name[11:]] = param  # 移除"classifier."前缀
+            
+            # 设置LoRA参数
+            if lora_params:
+                self.lora_wrapper.set_lora_parameters(lora_params)
+            
+            # 设置分类头参数
+            if classifier_params:
+                with torch.no_grad():
+                    for name, param in self.classification_head.named_parameters():
+                        if name in classifier_params and param.requires_grad:
+                            param.data.copy_(classifier_params[name])
+        else:
+            # 标准模式：设置所有参数
+            with torch.no_grad():
+                for name, param in self.classifier.named_parameters():
+                    if name in params and param.requires_grad:
+                        param.data.copy_(params[name])
     
     def _get_model_device(self):
-        """获取模型所在设备"""
-        if hasattr(self.classifier, 'parameters'):
-            try:
-                return next(self.classifier.parameters()).device
-            except StopIteration:
-                return torch.device('cpu')
-        elif hasattr(self.image_encoder, 'parameters'):
-            try:
-                return next(self.image_encoder.parameters()).device
-            except StopIteration:
-                return torch.device('cpu')
-        else:
-            return torch.device('cpu')
+        """获取模型所在设备 - 带缓存优化"""
+        if self._device_cache is None or self._device_cache_dirty:
+            if hasattr(self.classifier, 'parameters'):
+                try:
+                    self._device_cache = next(self.classifier.parameters()).device
+                    self._device_cache_dirty = False
+                except StopIteration:
+                    self._device_cache = torch.device('cpu')
+            elif hasattr(self.image_encoder, 'parameters'):
+                try:
+                    self._device_cache = next(self.image_encoder.parameters()).device
+                    self._device_cache_dirty = False
+                except StopIteration:
+                    self._device_cache = torch.device('cpu')
+            else:
+                self._device_cache = torch.device('cpu')
+        return self._device_cache
     
     def train_step(self, data: torch.Tensor, labels: torch.Tensor) -> float:
         """
@@ -522,13 +667,9 @@ class FederatedCLIPModel(BaseModel):
         self.classifier.train()
         self.optimizer.zero_grad()
         
-        # 使用基类的统一设备管理（如果可用）
-        try:
-            data, labels = self._ensure_device_compatibility(data, labels)
-        except AttributeError:
-            # 如果基类方法不可用，使用设备管理器
-            device = self._get_model_device()
-            data, labels = device_manager.move_tensors_to_device(data, labels, device=device)
+        # 获取缓存的设备，避免重复调用
+        device = self._get_model_device()
+        data, labels = device_manager.move_tensors_to_device(data, labels, device=device)
         
         # 前向传播
         outputs = self.classifier(data)
@@ -648,17 +789,15 @@ class FederatedCLIPModel(BaseModel):
         correct_predictions = 0
         top5_correct = 0
         
+        # 获取缓存的设备，避免每次batch都重复调用
+        device = self._get_model_device()
+        
         with torch.no_grad():
             for batch_data, batch_labels in data_loader:
-                try:
-                    # 使用基类的统一设备管理
-                    batch_data, batch_labels = self._ensure_device_compatibility(batch_data, batch_labels)
-                except AttributeError:
-                    # 如果基类方法不可用，使用设备管理器
-                    device = self._get_model_device()
-                    batch_data, batch_labels = device_manager.move_tensors_to_device(
-                        batch_data, batch_labels, device=device
-                    )
+                # 简化设备移动操作
+                batch_data, batch_labels = device_manager.move_tensors_to_device(
+                    batch_data, batch_labels, device=device
+                )
                 
                 # 前向传播
                 outputs = self.classifier(batch_data)
@@ -766,13 +905,40 @@ class FederatedCLIPModel(BaseModel):
         total_params = sum(p.numel() for p in self.classifier.parameters())
         trainable_params = sum(p.numel() for p in self.classifier.parameters() if p.requires_grad)
         
-        return {
+        summary = {
             'model_name': self.model_name,
             'num_classes': self.num_classes,
             'total_parameters': total_params,
             'trainable_parameters': trainable_params,
             'encoder_feature_dim': self.image_encoder.feature_dim,
-            'normalize_features': self.normalize_features
+            'normalize_features': self.normalize_features,
+            'lora_enabled': self._lora_enabled
+        }
+        
+        # 添加LoRA特定信息
+        if self._lora_enabled and self.lora_wrapper is not None:
+            lora_trainable_params = self.lora_wrapper.get_trainable_parameters()
+            summary.update({
+                'lora_trainable_parameters': lora_trainable_params,
+                'lora_status': self.lora_wrapper.is_lora_applied()
+            })
+        
+        return summary
+    
+    def is_lora_enabled(self) -> bool:
+        """检查是否启用了LoRA"""
+        return self._lora_enabled
+    
+    def get_lora_info(self) -> Dict[str, Any]:
+        """获取LoRA相关信息"""
+        if not self._lora_enabled or self.lora_wrapper is None:
+            return {'enabled': False}
+        
+        return {
+            'enabled': True,
+            'status': self.lora_wrapper.is_lora_applied(),
+            'trainable_parameters': self.lora_wrapper.get_trainable_parameters(),
+            'config': self.lora_config
         }
 
 
@@ -790,6 +956,7 @@ def create_clip_model(config: Dict[str, Any]) -> FederatedCLIPModel:
             - cache_dir: 模型缓存目录
             - optimizer_config: 优化器配置
             - checkpoint_path: 如果提供，将从此路径加载模型权重
+            - lora: LoRA配置字典
         
     Returns:
         联邦学习CLIP模型实例
@@ -806,5 +973,6 @@ def create_clip_model(config: Dict[str, Any]) -> FederatedCLIPModel:
         normalize_features=config.get('normalize_features', True),
         freeze_encoder=config.get('freeze_encoder', False),
         cache_dir=config.get('cache_dir', None),
-        optimizer_config=config.get('optimizer_config', None)
+        optimizer_config=config.get('optimizer_config', None),
+        lora_config=config.get('lora', None)
     )

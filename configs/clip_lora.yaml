@@ -1,0 +1,66 @@
+# CLIP模型LoRA微调配置
+# 启用LoRA微调功能的简化配置
+
+experiment:
+  name: "clip_lora_federated_learning"
+  rounds: 15
+  seed: 42
+
+device: "auto"
+
+wandb:
+  enabled: true
+  project: "clip-lora-federated-learning"
+  offline: true
+
+client:
+  num_clients: 4
+  local_epochs: 2
+  learning_rate: 0.00005     
+  
+  client_datasets:
+    client_0: [mnist]
+    client_1: [mnist]
+    client_2: [cifar10]
+    client_3: [mnist, cifar10]
+
+server:
+  aggregation_method: "federated_avg"
+  server_learning_rate: 1.0
+
+model:
+  type: "clip"
+  learning_rate: 0.00005   
+  model_name: "openai/clip-vit-base-patch32"
+  cache_dir: "/home/zzm/checkpoint"
+  use_pretrained: true
+  
+  # LoRA配置
+  lora:
+    enabled: true
+    r: 8
+    lora_alpha: 16
+    lora_dropout: 0.05
+    target_modules: ["q_proj", "v_proj", "k_proj", "out_proj"]
+
+optimizer:
+  type: "adamw"
+  learning_rate:  5e-5  
+  weight_decay: 0.01
+  betas: [0.9, 0.98]      
+
+data:
+  data_dir: "/home/zzm/dataset/"
+  batch_size: 32
+  num_workers: 2
+  
+  datasets:
+    mnist:
+      train: true
+    cifar10:
+      train: true
+
+evaluation:
+  evaluate_every: 1
+  test_batch_size: 64
+  metrics: ["loss", "accuracy", "top5_accuracy"]
