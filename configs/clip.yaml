@@ -35,20 +35,20 @@ wandb:
 # 客户端配置
 # ==============================
 client:
-  num_clients: 4                           # 客户端数量
+  num_clients: 1                           # 客户端数量
   local_epochs: 2                          # CLIP训练使用较少的本地轮数
   
   # 客户端数据集分配 - 支持多模态数据
   client_datasets:
     client_0:
-      - mnist                              # 单模态数据
-    client_1:
-      - mnist
-    client_2:
-      - cifar10                            # 不同的视觉数据
-    client_3:
       - mnist                              # 混合数据集
-      - cifar10
+#      - cifar10                           # 单模态数据
+#    client_1:
+#      - mnist
+#    client_2:
+#      - cifar10                            # 不同的视觉数据
+#    client_3:
+#      - mnist                              # 混合数据集
 
 # ==============================
 # 服务器配置
@@ -109,7 +109,7 @@ data:
   batch_size: 32                           # 较小批次，适合CLIP大模型
   num_workers: 2                           # 数据加载器工作进程数
   
-  # 具体数据集配置
+# 具体数据集配置
   datasets:
     mnist:
       train: true                          # MNIST数据集

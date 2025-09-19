@@ -108,12 +108,6 @@ class CLIPLoRAWrapper:
             total += self.text_lora_wrapper.get_trainable_parameters()
         return total
     
-    def is_lora_applied(self) -> bool:
-        """检查是否已应用LoRA"""
-        vision_applied = self.vision_lora_wrapper and self.vision_lora_wrapper.is_lora_applied()
-        text_applied = self.text_lora_wrapper and self.text_lora_wrapper.is_lora_applied()
-        return vision_applied or text_applied
-    
     def is_lora_applied(self) -> Dict[str, bool]:
         """检查LoRA应用状态"""
         return {

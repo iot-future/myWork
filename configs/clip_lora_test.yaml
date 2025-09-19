@@ -28,7 +28,7 @@ client:
   
   client_datasets:
     client_0:
-      - cifar100                              # 客户端0：仅MNIST
+      - cifar10                              # 客户端0：仅MNIST
     client_1:
       - mnist                              # 客户端1：仅MNIST
     client_2:

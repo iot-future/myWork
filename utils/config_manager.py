@@ -22,11 +22,11 @@ class ConfigManager:
             raise FileNotFoundError(f"配置文件不存在: {config_file}")
         with open(config_file, 'r', encoding='utf-8') as f:
             config = yaml.safe_load(f)
-        
+
         # 验证配置文件的完整性
         ConfigManager._validate_config(config)
         return config
-    
+
     @staticmethod
     def _validate_config(config: Dict[str, Any]):
         """验证配置文件的完整性和正确性"""
@@ -35,28 +35,28 @@ class ConfigManager:
         for section in required_sections:
             if section not in config:
                 raise ValueError(f"配置文件缺少必需的节: {section}")
-        
+
         # 验证必需的多数据集配置
         client_config = config.get('client', {})
         data_config = config.get('data', {})
-        
+
         # 必须有 client_datasets 配置
         if 'client_datasets' not in client_config:
             raise ValueError(f"配置文件缺少必需的 client.client_datasets 配置")
-        
+
         # 必须有 datasets 配置
         if 'datasets' not in data_config:
             raise ValueError(f"配置文件缺少必需的 data.datasets 配置")
-        
+
         client_datasets = client_config['client_datasets']
         num_clients = client_config['num_clients']
-        
+
         # 检查是否为所有客户端都配置了数据集
         for i in range(num_clients):
             client_key = f"client_{i}"
             if client_key not in client_datasets:
                 raise ValueError(f"客户端 {client_key} 未在 client_datasets 中配置")
-        
+
         # 检查配置的数据集是否在 data.datasets 中存在
         available_datasets = set(data_config['datasets'].keys())
         for client_key, datasets in client_datasets.items():
@@ -65,7 +65,7 @@ class ConfigManager:
             for dataset_name in datasets:
                 if dataset_name not in available_datasets:
                     raise ValueError(f"客户端 {client_key} 配置的数据集 '{dataset_name}' 不在 data.datasets 中")
-        
+
         print("✓ 配置文件验证通过")
 
     @staticmethod

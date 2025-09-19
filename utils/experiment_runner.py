@@ -200,12 +200,13 @@ class ExperimentRunner:
             datasets_str = ", ".join(dataset_info)
             print(f"  客户端 {client_id}: {datasets_str} - 总计 {total_client_samples} 样本")
 
-    def setup_server(self):
+    def setup_server(self, dataset_name: List[str]):
         """设置服务器"""
         optimizer_config = self.config.get('optimizer', {})
         global_model = ModelFactory.create_model(
             self.config['model'],
-            optimizer_config if optimizer_config else None
+            optimizer_config if optimizer_config else None,
+            dataset_name=dataset_name
         )
 
         # 将模型移到设备
@@ -216,7 +217,7 @@ class ExperimentRunner:
             lora_info = global_model.get_lora_info()
             print(f"🎯 全局模型LoRA状态: 已启用 | 可训练参数: {lora_info.get('trainable_parameters', 0):,}")
         elif hasattr(global_model, 'is_lora_enabled'):
-            print("📸 全局模型: 标准微调模式")
+            print("📸 全局模型: 正常训练")
 
         # 创建聚合器和服务器
         aggregator = FederatedAveraging()
@@ -235,9 +236,12 @@ class ExperimentRunner:
         
         for i, dataloaders_dict in enumerate(client_data_loaders):
             client_id = f"client_{i}"
+            # 从数据加载器字典中提取数据集名称
+            client_dataset_names = list(dataloaders_dict.keys())
             client_model = ModelFactory.create_model(
                 self.config['model'],
-                optimizer_config if optimizer_config else None
+                optimizer_config if optimizer_config else None,
+                dataset_name=client_dataset_names
             )
 
             # 将客户端模型移到设备
@@ -291,7 +295,7 @@ class ExperimentRunner:
         client_updates = []
         
         # 检查是否显示详细进度（batch级别）
-        show_batch_progress = self.config.get('training', {}).get('show_batch_progress', True)
+        show_batch_progress = self.config.get('training', {}).get('show_batch_progress', False)
         
         with tqdm(self.clients, desc=f"第{round_num}轮训练", 
                   bar_format="{desc}: {percentage:3.0f}%|{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]",
@@ -368,7 +372,7 @@ class ExperimentRunner:
         client_data_loaders = self.setup_data()
 
         # 设置服务器和客户端
-        self.setup_server()
+        self.setup_server(list(self.test_loaders.keys()))
         self.setup_clients(client_data_loaders)
 
         print("\n开始联邦学习训练...")
