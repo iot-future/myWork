@@ -19,6 +19,9 @@ def init_wandb(config: Dict[str, Any], project_name: str = "federated-learning",
     """
     if offline:
         os.environ["WANDB_MODE"] = "offline"
+    else:
+        os.environ['HTTP_PROXY'] = 'http://127.0.0.1:7890'
+        os.environ['HTTPS_PROXY'] = 'http://127.0.0.1:7890'
     
     experiment_name = config.get('experiment', {}).get('name', 'fl_experiment')
     
