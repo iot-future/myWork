@@ -29,11 +29,6 @@ class BaseClient(ABC):
             本地训练后的模型参数
         """
         pass
-    
-    @abstractmethod
-    def set_data(self, data):
-        """设置客户端数据"""
-        pass
 
 
 class BaseServer(ABC):

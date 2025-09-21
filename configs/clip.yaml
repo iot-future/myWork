@@ -18,10 +18,10 @@ device: "auto"  # auto: 自动检测GPU, cuda: 强制GPU, cpu: 强制CPU
 # 学习率配置 - 统一管理所有学习率设置
 # ==============================
 learning_rates:
-  client: 0.0001                        # CLIP客户端学习率（较小）
+  client: 0.00005                        # CLIP客户端学习率（较小）
   server: 1.0                              # 服务器聚合学习率
-  model: 0.0001                          # CLIP模型训练学习率
-  optimizer: 0.0001                       # CLIP优化器学习率
+  model: 0.00005                          # CLIP模型训练学习率
+  optimizer: 0.00005                       # CLIP优化器学习率
 
 # ==============================
 # 分布式训练和日志配置
@@ -35,20 +35,20 @@ wandb:
 # 客户端配置
 # ==============================
 client:
-  num_clients: 1                           # 客户端数量
+  num_clients: 4                           # 客户端数量
   local_epochs: 1                          # CLIP训练使用较少的本地轮数
   
   # 客户端数据集分配 - 支持多模态数据
   client_datasets:
     client_0:
-#      - mnist                              # 混合数据集
+      - mnist                              # 混合数据集
       - cifar10                           # 单模态数据
-#    client_1:
-#      - cifar10
-#    client_2:
-#      - cifar10                            # 不同的视觉数据
-#    client_3:
-#      - mnist                              # 混合数据集
+    client_1:
+      - cifar10
+    client_2:
+      - cifar10                            # 不同的视觉数据
+    client_3:
+      - mnist                              # 混合数据集
 
 # ==============================
 # 服务器配置
@@ -109,10 +109,10 @@ data:
   
 # 具体数据集配置
   datasets:
-#    mnist:
-#      train: true                          # MNIST数据集
+    mnist:
+      train: true                          # MNIST数据集
     cifar10:
-       train: true                          # CIFAR-10数据集
+      train: true                          # CIFAR-10数据集
     # 注释掉的CLIP专用数据集配置，暂时不使用
     # clip:
     #   train: true

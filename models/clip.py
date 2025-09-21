@@ -334,7 +334,7 @@ class FederatedCLIPModel(BaseModel, DeviceMixin):
 
         try:
             # 创建LoRA包装器
-            self.lora_wrapper = CLIPLoRAWrapper(vision_model=self.image_encoder.vision_model)
+            self.lora_wrapper = CLIPLoRAWrapper(vision_model=self.classifier.image_encoder)
 
             # 简化配置处理
             vision_config = {
@@ -350,7 +350,7 @@ class FederatedCLIPModel(BaseModel, DeviceMixin):
 
             # # 输出关键的LoRA统计信息
             trainable_params = self.lora_wrapper.get_trainable_parameters()
-            total_original_params = sum(p.numel() for p in self.image_encoder.vision_model.parameters())
+            total_original_params = sum(p.numel() for p in self.classifier.image_encoder.parameters())
 
             print(
                 f"🎯 LoRA设置完成 | 参数效率: {(trainable_params / total_original_params) * 100:.2f}% ({trainable_params:,}/{total_original_params:,})")

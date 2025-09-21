@@ -256,6 +256,7 @@ class ExperimentRunner:
 
         # 所有客户端进行本地训练 - 使用嵌套的进度条
         client_updates = []
+        client_metrics = {}  # 用于收集每个客户端的评估结果
 
         # 检查是否显示详细进度（batch级别）
         show_batch_progress = self.config.get('training', {}).get('show_batch_progress', False)
@@ -264,10 +265,18 @@ class ExperimentRunner:
                   bar_format="{desc}: {percentage:3.0f}%|{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]",
                   ncols=None, leave=False, position=1, file=sys.stdout) as pbar:
 
-            for i, client in enumerate(pbar):
+            for _, client in enumerate(pbar):
                 # 传递show_progress参数以启用batch级别的进度条
-                client_result = client.train(global_params, show_progress=show_batch_progress)  # 1111111111111111
+                client_result = client.train(global_params, show_progress=show_batch_progress)
                 client_updates.append(client_result)
+
+                # 收集客户端评估指标
+                metrics = client_result.get('metrics', {})
+                client_metrics[client.client_id] = metrics
+                
+                # 打印客户端指标
+                if show_batch_progress:
+                    print(f"客户端 {client.client_id} 准确率: {metrics.get('accuracy', 0) * 100:.2f}%, 损失: {metrics.get('loss', 0):.4f}")
 
                 # 简化的进度信息
                 loss = client_result.get('metrics', {}).get('loss', 0)
@@ -292,9 +301,6 @@ class ExperimentRunner:
         # 评估（使用新的评估管理器）
         metrics = {}
         if round_num % self.config['evaluation']['evaluate_every'] == 0:
-            # 评估客户端本地模型
-            client_metrics = self.evaluation_manager.evaluate_clients(self.clients, round_num)
-
             # 评估全局模型
             global_metrics = self.evaluation_manager.evaluate_global_model(
                 self.server, self.test_loaders, round_num
