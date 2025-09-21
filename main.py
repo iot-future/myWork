@@ -40,7 +40,7 @@ def main():
     
     data_info = f"批大小: {config['data']['batch_size']}"
     if config.get('wandb', {}).get('enabled', False):
-        data_info += f" | WandB项目: {config['wandb']['project']}"
+        data_info += f" | WandB项目: {config['wandb']['experiment_name']}"
     print(data_info)
     print("=" * 60)
     

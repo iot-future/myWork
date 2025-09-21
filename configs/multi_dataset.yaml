@@ -28,7 +28,7 @@ learning_rates:
 # ==============================
 wandb:
   enabled: true                            # 启用WandB记录多数据集实验
-  project: "federated-learning-heterogeneous"  # 专门的项目名称
+  experiment_name: "federated-learning-heterogeneous"  # 专门的项目名称
   offline: true                            # 离线模式
 
 # ==============================

@@ -14,14 +14,15 @@ class ModelFactory:
 
     @staticmethod
     def create_model(model_config: Dict[str, Any], optimizer_config: Optional[Dict[str, Any]] = None,
-                     dataset_name: Optional[List[str]] = None):
+                     dataset_names: Optional[List[str]] = None, device=None):
         """
         根据配置创建模型
         
         Args:
             model_config: 模型配置字典
             optimizer_config: 优化器配置字典
-            dataset_name: 所用的数据集
+            dataset_names: 所用的数据集
+            device: 设备信息
             
         Returns:
             配置好的模型实例
@@ -50,11 +51,12 @@ class ModelFactory:
                 model_name=model_config.get('model_name', 'openai/clip-vit-base-patch32'),
                 num_classes=model_config.get('num_classes', 10),
                 normalize_features=model_config.get('normalize_features', True),
-                freeze_encoder=model_config.get('freeze_vision_encoder', False),
+                freeze_classifier=model_config.get('freeze_classifier', True),
                 cache_dir=model_config.get('cache_dir', None),
                 optimizer_config=optimizer_config,
                 lora_config=lora_config if lora_config.get('enabled', False) else None,
-                dataset_name=dataset_name
+                dataset_names=dataset_names,
+                device=device
             )
         else:
             raise ValueError(f"不支持的模型类型: {model_type}")

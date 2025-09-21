@@ -28,7 +28,7 @@ learning_rates:
 # ==============================
 wandb:
   enabled: false                           # 是否启用WandB
-  project: "federated-learning-baseline"   # WandB项目名称
+  experiment_name: "federated-learning-baseline"   # WandB项目名称
   offline: true                            # 离线模式，适合基线实验
 
 # ==============================

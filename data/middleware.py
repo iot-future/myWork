@@ -50,6 +50,13 @@ class UnifiedDataset(Dataset):
         """获取并加工单个样本"""
         image, label = self.original_dataset[idx]
 
+        # 如何image不是是元组
+        if not isinstance(image, tuple):
+            raise ValueError("数据包装有误，期望 (image, label) 元组")
+        
+        dataset_name = label
+        image,label = image[0],image[1]
+        
         # 转换为张量（如果还不是的话）
         if not isinstance(image, torch.Tensor):
             import torchvision.transforms as transforms
@@ -64,7 +71,7 @@ class UnifiedDataset(Dataset):
         else:
             label = label.long()
 
-        return image, label
+        return image, label, dataset_name
 
     def _process_image(self, image: torch.Tensor) -> torch.Tensor:
         """

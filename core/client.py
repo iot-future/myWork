@@ -59,13 +59,13 @@ class FederatedClient(BaseClient):
             )
 
         for epoch in range(self.epochs):
-            for batch_data, batch_labels in self.data_loader:
+            for batch_data, batch_labels, dataset_names in self.data_loader:
                 # 将数据移到设备
                 batch_data, batch_labels = device_manager.move_tensors_to_device(
                     batch_data, batch_labels, device=self.device
                 )
 
-                loss = self.model.train_step(batch_data, batch_labels)
+                loss = self.model.train_step(batch_data, batch_labels, dataset_names)
                 total_loss += loss * batch_data.size(0)
                 total_samples += batch_data.size(0)
 

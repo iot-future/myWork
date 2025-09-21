@@ -295,46 +295,6 @@ class MultiDatasetZeroShotClassifier(nn.Module):
         
         return logits
     
-    def forward_batch(self, images: torch.Tensor, dataset_names: List[str]) -> Dict[str, torch.Tensor]:
-        """
-        批量前向传播，支持混合数据集
-        
-        Args:
-            images: 输入图像批次
-            dataset_names: 每个样本对应的数据集名称列表
-            
-        Returns:
-            Dict[dataset_name, logits]: 按数据集分组的logits
-        """
-        if len(dataset_names) != images.size(0):
-            raise ValueError("dataset_names长度必须与batch_size相等")
-        
-        # 获取图像特征
-        image_features = self.image_encoder(images)
-        
-        # 按数据集分组处理
-        results = {}
-        dataset_indices = {}
-        
-        # 收集每个数据集的样本索引
-        for i, dataset_name in enumerate(dataset_names):
-            if dataset_name not in dataset_indices:
-                dataset_indices[dataset_name] = []
-            dataset_indices[dataset_name].append(i)
-        
-        # 为每个数据集计算logits
-        for dataset_name, indices in dataset_indices.items():
-            if dataset_name not in self.registered_datasets:
-                raise ValueError(f"数据集 {dataset_name} 未注册")
-            
-            # 提取对应样本的特征
-            dataset_features = image_features[indices]
-            
-            # 计算logits
-            dataset_logits = self.classification_heads[dataset_name](dataset_features)
-            results[dataset_name] = dataset_logits
-        
-        return results
     
     def predict(self, images: torch.Tensor, dataset_name: str) -> torch.Tensor:
         """预测类别"""

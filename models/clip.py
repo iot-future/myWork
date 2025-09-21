@@ -8,21 +8,22 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from typing import Dict, Any, Optional, Union, List
-from transformers import CLIPProcessor, CLIPVisionModel, CLIPTextModel
+from transformers import CLIPModel, CLIPProcessor, CLIPTokenizer, CLIPVisionModel, CLIPTextModel
 from PIL import Image
 from core.base import BaseModel
 from utils.device_manager import device_manager
 # zero-shot 分类头
-from models.zero_shot_classifier import (
-    create_zero_shot_head,
-    ZeroShotClassifier,
-    MultiDatasetZeroShotClassifier,
+
+from models.classificationHead import (
+    create_multi_dataset_zero_shot_classifier,
+    MultiHeadImageClassifier
 )
 
 # LoRA相关导入将在下面条件导入
 
 try:
     from lora.clip_lora import CLIPLoRAWrapper
+
     LORA_AVAILABLE = True
 except ImportError as e:
     LORA_AVAILABLE = False
@@ -94,14 +95,16 @@ class ImageEncoder(BaseEncoder):
                  cache_dir: Optional[str] = None, device: Optional[str] = None):
         super().__init__(model_name, cache_dir, device)
 
-        print(f'Loading {model_name} vision model.')
-        self.vision_model = CLIPVisionModel.from_pretrained(model_name, cache_dir=cache_dir)
-        self.feature_dim = self.vision_model.config.hidden_size
+        print(f'Loading {model_name} CLIP model.')
+        self.clip_model = CLIPModel.from_pretrained(model_name, cache_dir=cache_dir)
+        self.feature_dim = self.clip_model.config.projection_dim  # 一般为512
+        # 只保留视觉模型部分
+        del self.clip_model.text_model
+        del self.clip_model.text_embed_dim
+        del self.clip_model.text_projection
 
     def forward(self, images):
-        """将图像编码为特征向量"""
         device = self._get_device()
-
         if isinstance(images, list) and isinstance(images[0], Image.Image):
             inputs = self.processor(images=images, return_tensors="pt", padding=True)
             pixel_values = device_manager.move_tensors_to_device(inputs['pixel_values'], device=device)
@@ -110,8 +113,8 @@ class ImageEncoder(BaseEncoder):
         else:
             raise ValueError("Images must be either a list of PIL Images or a torch.Tensor")
 
-        vision_outputs = self.vision_model(pixel_values=pixel_values)
-        return vision_outputs.pooler_output
+        features = self.clip_model.get_image_features(pixel_values=pixel_values)
+        return features
 
     def save(self, filename: str):
         super().save(filename, 'vision_model')
@@ -135,23 +138,12 @@ class TextEncoder(BaseEncoder):
         self.text_model = CLIPTextModel.from_pretrained(model_name, cache_dir=cache_dir)
         self.feature_dim = self.text_model.config.hidden_size
 
-    def forward(self, texts: Union[List[str], torch.Tensor]):
-        """将文本编码为特征向量"""
+    def forward(self, inputs: Dict[str, torch.Tensor], **kwargs):
+        """只支持分词后的字典输入"""
         device = self._get_device()
-
-        if isinstance(texts, list):
-            inputs = self.processor(text=texts, return_tensors="pt", padding=True, truncation=True)
-            input_ids, attention_mask = device_manager.move_tensors_to_device(
-                inputs['input_ids'], inputs['attention_mask'], device=device
-            )
-        elif isinstance(texts, torch.Tensor):
-            input_ids = texts
-            attention_mask = None
-        else:
-            raise ValueError("Texts must be either a list of strings or a torch.Tensor")
-
-        text_outputs = self.text_model(input_ids=input_ids, attention_mask=attention_mask)
-        return text_outputs.pooler_output
+        inputs = {k: v.to(device) for k, v in inputs.items()}
+        text_outputs = self.text_model(**inputs)
+        return text_outputs
 
     def save(self, filename: str):
         super().save(filename, 'text_model')
@@ -259,12 +251,13 @@ class FederatedCLIPModel(BaseModel, DeviceMixin):
                  model_name: str = "openai/clip-vit-base-patch32",
                  num_classes: int = 10,
                  normalize_features: bool = True,
-                 freeze_encoder: bool = False,
+                 freeze_classifier: bool = True,
                  cache_dir: Optional[str] = None,
                  optimizer_config: Optional[Dict[str, Any]] = None,
                  checkpoint_path: Optional[str] = None,
                  lora_config: Optional[Dict[str, Any]] = None,
-                 dataset_name: Optional[List[str]] = None):
+                 dataset_names: Optional[List[str]] = None,
+                 device: Optional[Union[str, torch.device]] = None):
         """初始化联邦学习CLIP模型"""
         super().__init__(optimizer_config)
         DeviceMixin.__init__(self)
@@ -274,7 +267,7 @@ class FederatedCLIPModel(BaseModel, DeviceMixin):
         self.normalize_features = normalize_features
         self.cache_dir = cache_dir
         self.lora_config = lora_config or {}
-        self.dataset_name = dataset_name
+        self.dataset_names = dataset_names
 
         # 创建图像编码器
         self.image_encoder = ImageEncoder(
@@ -282,22 +275,23 @@ class FederatedCLIPModel(BaseModel, DeviceMixin):
             cache_dir=self.cache_dir
         )
 
+        # 构建分词器
+        self.tokenizer = CLIPTokenizer.from_pretrained(self.model_name, cache_dir=self.cache_dir)
         # 创建文本编码器（用于构建零样本分类头）
         self.text_encoder = TextEncoder(model_name=self.model_name, cache_dir=self.cache_dir)
-        
+
         # 创建多数据集零样本分类器
-        self.classification_head = MultiDatasetZeroShotClassifier(
-            image_encoder=self.image_encoder,
+        self.classification_head = create_multi_dataset_zero_shot_classifier(
+            tokenizer=self.tokenizer,
             text_encoder=self.text_encoder,
-            temperature=1.0
+            dataset_names=self.dataset_names,
+            device=device
         )
-        
-        # 注册所有数据集
-        if self.dataset_name:
-            for dataset_name in self.dataset_name:
-                self.classification_head.register_dataset(dataset_name)
-        
-        self.classifier = self.classification_head
+
+        # 创建多头图像分类器
+        self.classifier = MultiHeadImageClassifier(self.image_encoder, self.classification_head)
+
+        self.classifier.to(device)
 
         # 初始化LoRA包装器
         self.lora_wrapper = None
@@ -311,16 +305,19 @@ class FederatedCLIPModel(BaseModel, DeviceMixin):
         if self.lora_config.get('enabled', False) and LORA_AVAILABLE:
             self._setup_lora()
 
-        # 如果需要冻结编码器
-        if freeze_encoder:
-            for param in self.image_encoder.parameters():
-                param.requires_grad_(False)
+            # LoRA启用后，重新创建优化器以包含LoRA参数和分类头参数
+            if self._lora_enabled:
+                lora_params = [p for p in self.image_encoder.parameters() if p.requires_grad]
+                classifier_params = [p for p in self.classification_head.parameters() if p.requires_grad]
+                all_trainable_params = lora_params + classifier_params
+                self.create_optimizer(all_trainable_params)
 
-        # 创建AdamW优化器
-        trainable_params = [p for p in self.image_encoder.parameters() if p.requires_grad]
-        
+        # 如果需要冻结编码器
+        if freeze_classifier:
+            self.classifier.freeze_head()
+
         # 尝试使用提供的配置创建优化器
-        self.create_optimizer(trainable_params)
+        self.create_optimizer(self.classifier.parameters())
 
         # 如果提供了checkpoint路径，加载预训练权重
         if checkpoint_path is not None:
@@ -351,7 +348,7 @@ class FederatedCLIPModel(BaseModel, DeviceMixin):
             self.lora_wrapper.apply_lora(vision_config=vision_config)
             self._lora_enabled = True
 
-            # 输出关键的LoRA统计信息
+            # # 输出关键的LoRA统计信息
             trainable_params = self.lora_wrapper.get_trainable_parameters()
             total_original_params = sum(p.numel() for p in self.image_encoder.vision_model.parameters())
 
@@ -408,21 +405,15 @@ class FederatedCLIPModel(BaseModel, DeviceMixin):
                 self._device_cache = torch.device('cpu')
         return self._device_cache
 
-    def train_step(self, data: torch.Tensor, labels: torch.Tensor, dataset_name: str = None) -> float:
+    def train_step(self, data: torch.Tensor, labels: torch.Tensor, dataset_names: Optional[tuple] = None) -> float:
         """单步训练"""
-        if dataset_name is None and len(self.dataset_name) == 1:
-            dataset_name = self.dataset_name[0]
-        elif dataset_name is None:
-            raise ValueError("多数据集模式需要指定dataset_name")
-        
-        # 设置所有相关组件为训练模式
         self.classifier.train()
         self.optimizer.zero_grad()
 
         device = self._get_model_device()
         data, labels = device_manager.move_tensors_to_device(data, labels, device=device)
 
-        outputs = self.classification_head(data, dataset_name)
+        outputs = self.classifier(data, dataset_names[0])
         loss = self.criterion(outputs, labels)
         loss.backward()
 
@@ -431,71 +422,8 @@ class FederatedCLIPModel(BaseModel, DeviceMixin):
 
         return loss.item()
 
-    def _compute_metrics(self, outputs: torch.Tensor, labels: torch.Tensor, loss: torch.Tensor) -> Dict[str, float]:
-        """计算评估指标的通用方法"""
-        _, predicted = torch.max(outputs, 1)
-        total = labels.size(0)
-        correct = (predicted == labels).sum().item()
-        accuracy = correct / total
-    
-        result = {'loss': loss.item(), 'accuracy': accuracy}
-    
-        # 计算Top-5准确率（如果类别数>=5）
-        if self.num_classes >= 5:
-            _, top5_pred = outputs.topk(5, 1, largest=True, sorted=True)
-            top5_correct = top5_pred.eq(labels.view(-1, 1).expand_as(top5_pred)).sum().item()
-            result['top5_accuracy'] = top5_correct / total
-    
-        return result
-    
-    def evaluate(self, data: torch.Tensor, labels: torch.Tensor, dataset_name: str = None) -> Dict[str, float]:
-        """模型评估"""
-        if dataset_name is None and len(self.dataset_name) == 1:
-            dataset_name = self.dataset_name[0]
-        elif dataset_name is None:
-            raise ValueError("多数据集模式需要指定dataset_name")
-    
-        self.image_encoder.eval()
-        with torch.no_grad():
-            outputs = self.classification_head(data, dataset_name)
-            loss = self.criterion(outputs, labels)
-            return self._compute_metrics(outputs, labels, loss)
-    
-    def predict(self, data: torch.Tensor, dataset_name: str = None) -> torch.Tensor:
-        """预测"""
-        if dataset_name is None and len(self.dataset_name) == 1:
-            dataset_name = self.dataset_name[0]
-        elif dataset_name is None:
-            raise ValueError("多数据集模式需要指定dataset_name")
-    
-        self.image_encoder.eval()
-        with torch.no_grad():
-            return self.classification_head.predict(data, dataset_name)
-    
-    def predict_proba(self, data: torch.Tensor, dataset_name: str = None) -> torch.Tensor:
-        """预测概率"""
-        if dataset_name is None and len(self.dataset_name) == 1:
-            dataset_name = self.dataset_name[0]
-        elif dataset_name is None:
-            raise ValueError("多数据集模式需要指定dataset_name")
-    
-        self.image_encoder.eval()
-        with torch.no_grad():
-            return self.classification_head.predict_proba(data, dataset_name)
-    
-    def get_features(self, data: torch.Tensor) -> torch.Tensor:
-        """提取特征"""
-        self.image_encoder.eval()
-        with torch.no_grad():
-            return self.image_encoder(data)
-
-    def evaluate_with_dataloader(self, data_loader, dataset_name: str = None) -> Dict[str, float]:
+    def evaluate_with_dataloader(self, data_loader) -> Dict[str, float]:
         """使用数据加载器评估模型"""
-        if dataset_name is None and len(self.dataset_name) == 1:
-            dataset_name = self.dataset_name[0]
-        elif dataset_name is None:
-            raise ValueError("多数据集模式需要指定dataset_name")
-        
         self.classifier.eval()
         total_loss = 0.0
         total_samples = 0
@@ -504,12 +432,12 @@ class FederatedCLIPModel(BaseModel, DeviceMixin):
         device = self._get_model_device()
 
         with torch.no_grad():
-            for batch_data, batch_labels in data_loader:
+            for batch_data, batch_labels, dataset_names in data_loader:
                 batch_data, batch_labels = device_manager.move_tensors_to_device(
                     batch_data, batch_labels, device=device
                 )
 
-                outputs = self.classifier(batch_data, dataset_name)
+                outputs = self.classifier(batch_data, dataset_names[0])
                 loss = self.criterion(outputs, batch_labels)
 
                 batch_size = batch_data.size(0)
@@ -618,3 +546,23 @@ class FederatedCLIPModel(BaseModel, DeviceMixin):
             'trainable_parameters': self.lora_wrapper.get_trainable_parameters(),
             'config': self.lora_config
         }
+
+    def _compute_metrics(self, outputs: torch.Tensor, labels: torch.Tensor, loss: torch.Tensor) -> Dict[str, float]:
+        """计算评估指标的通用方法"""
+        pass
+
+    def evaluate(self, data: torch.Tensor, labels: torch.Tensor, dataset_name: str = None) -> Dict[str, float]:
+        """模型评估"""
+        pass
+
+    def predict(self, data: torch.Tensor, dataset_name: str = None) -> torch.Tensor:
+        """预测"""
+        pass
+
+    def predict_proba(self, data: torch.Tensor, dataset_name: str = None) -> torch.Tensor:
+        """预测概率"""
+        pass
+
+    def get_features(self, data: torch.Tensor) -> torch.Tensor:
+        """提取特征"""
+        pass

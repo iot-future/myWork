@@ -7,11 +7,11 @@ data 模块的核心接口。
 设计原则：
 - 数据集类只负责数据的加载和预处理变换
 - DataLoader 的创建统一在此模块中进行，确保联邦学习的数据分区需求
-- 支持灵活的批处理大小和工作进程配置
+- 支持灵活地批处理大小和工作进程配置
 """
 from typing import Any, Dict, List, Tuple, Union
 import torch
-from torch.utils.data import DataLoader, Dataset, Subset
+from torch.utils.data import DataLoader, Dataset, Subset, ConcatDataset, Sampler
 from data.datasets import mnist, cifar10, cifar100
 from data.middleware import create_unified_dataloader
 
@@ -21,6 +21,22 @@ SUPPORTED_DATASETS = {
     'cifar10': cifar10.CIFAR10,
     'cifar100': cifar100.CIFAR100
 }
+
+
+class DatasetWithSource(Dataset):
+    """包装数据集，添加来源标识"""
+
+    def __init__(self, base_dataset, dataset_name):
+        self.base_dataset = base_dataset  # 原始数据集
+        self.dataset_name = dataset_name  # 来源标识（可以是索引、名称等）
+
+    def __len__(self):
+        return len(self.base_dataset)
+
+    def __getitem__(self, idx):
+        # 返回
+        data = self.base_dataset[idx]
+        return data, self.dataset_name
 
 
 def _validate_dataset_name(dataset_name: str) -> str:
@@ -57,10 +73,10 @@ def _calculate_client_data_range(client_id: int, total_clients: int, total_items
     """
     items_per_client = total_items // total_clients
     start_idx = client_id * items_per_client
-    
+
     # 最后一个客户端获得剩余的所有数据
     end_idx = total_items if client_id == total_clients - 1 else start_idx + items_per_client
-    
+
     return start_idx, end_idx
 
 
@@ -80,10 +96,10 @@ def _generate_shuffled_indices(dataset_size: int, seed: int) -> List[int]:
 
 
 def _split_dataset(
-    dataset: Dataset, 
-    total_clients: int, 
-    client_dataset_id: int = None, 
-    seed: int = 42
+        dataset: Dataset,
+        total_clients: int,
+        client_dataset_id: int = None,
+        seed: int = 42
 ) -> Union[List[int], List[List[int]]]:
     """将数据集索引均匀（IID）地分配给客户端。
     
@@ -108,7 +124,7 @@ def _split_dataset(
             client_dataset_id, total_clients, dataset_size
         )
         return shuffled_indices[start_idx:end_idx]
-    
+
     # 返回所有客户端的索引
     all_client_indices = []
     for client_id in range(total_clients):
@@ -117,19 +133,19 @@ def _split_dataset(
         )
         client_indices = shuffled_indices[start_idx:end_idx]
         all_client_indices.append(client_indices)
-    
+
     return all_client_indices
 
 
 def _create_single_client_dataloader(
-    dataset_name: str,
-    dataset_config: Dict[str, Any],
-    client_original_id: str,
-    dataset_client_mappings: Dict[str, Dict[str, int]],
-    dataset_client_counts: Dict[str, int],
-    batch_size: int,
-    num_workers: int,
-    seed: int
+        dataset_name: str,
+        dataset_config: Dict[str, Any],
+        client_original_id: str,
+        dataset_client_mappings: Dict[str, Dict[str, int]],
+        dataset_client_counts: Dict[str, int],
+        batch_size: int,
+        num_workers: int,
+        seed: int
 ) -> DataLoader:
     """为单个数据集创建客户端的 DataLoader。
     
@@ -148,31 +164,33 @@ def _create_single_client_dataloader(
     """
     # 1. 验证数据集名称
     normalized_name = _validate_dataset_name(dataset_name)
-    
+
     # 2. 获取客户端在数据集内的ID
     client_internal_id = dataset_client_mappings[normalized_name][client_original_id]
-    
+
     # 3. 创建完整数据集
     dataset_class = SUPPORTED_DATASETS[normalized_name]
     full_dataset = dataset_class(**dataset_config)
 
     # 4. 获取客户端的数据索引
     client_indices = _split_dataset(
-        dataset=full_dataset, 
-        total_clients=dataset_client_counts[normalized_name], 
-        client_dataset_id=client_internal_id, 
+        dataset=full_dataset,
+        total_clients=dataset_client_counts[normalized_name],
+        client_dataset_id=client_internal_id,
         seed=seed
     )
 
     # 5. 创建客户端数据子集
     client_subset = Subset(full_dataset, client_indices)
+    # 为后续多数据集训练，应该为dataset添加来源信息
+    client_subset = DatasetWithSource(client_subset, dataset_name=normalized_name)
 
     # 6. 创建 DataLoader
     dataloader = DataLoader(
         dataset=client_subset,
         batch_size=batch_size,
         shuffle=True,
-        num_workers=num_workers
+        num_workers=num_workers,
     )
 
     # 7. 使用中间件统一处理
@@ -180,13 +198,13 @@ def _create_single_client_dataloader(
 
 
 def get_client_dataloaders(
-    client_original_id: str,
-    dataset_client_mappings: Dict[str, Dict[str, int]],
-    dataset_client_counts: Dict[str, int],
-    batch_size: int,
-    dataset_configs: Dict[str, Dict[str, Any]],
-    num_workers: int = 0,
-    seed: int = 42
+        client_original_id: str,
+        dataset_client_mappings: Dict[str, Dict[str, int]],
+        dataset_client_counts: Dict[str, int],
+        batch_size: int,
+        dataset_configs: Dict[str, Dict[str, Any]],
+        num_workers: int = 0,
+        seed: int = 42
 ) -> Dict[str, DataLoader]:
     """
     为特定客户端创建并返回一个或多个 DataLoader。
@@ -267,10 +285,10 @@ def get_dataset_info(dataset_name: str, dataset_config: Dict[str, Any]) -> Dict[
     """
     # 验证数据集名称
     normalized_name = _validate_dataset_name(dataset_name)
-    
+
     # 清理配置参数
     clean_config = _clean_dataset_config(dataset_config)
-    
+
     # 创建数据集实例
     dataset_class = SUPPORTED_DATASETS[normalized_name]
     dataset = dataset_class(**clean_config)
@@ -280,3 +298,100 @@ def get_dataset_info(dataset_name: str, dataset_config: Dict[str, Any]) -> Dict[
         'num_classes': len(dataset.classnames),
         'dataset_size': len(dataset)
     }
+
+
+class GroupBatchSampler(Sampler):
+    """
+    保证每个 batch 只来自同一个子数据集的采样器
+    """
+
+    def __init__(self, datasets, batch_size, shuffle=True):
+        super().__init__()  # 推荐加上这一行
+        self.datasets = datasets
+        self.batch_size = batch_size
+        self.shuffle = shuffle
+        # 计算每个子数据集的索引范围
+        self.dataset_ranges = []
+        start = 0
+        for ds in datasets:
+            end = start + len(ds)
+            self.dataset_ranges.append((start, end))
+            start = end
+
+    def __iter__(self):
+        indices = []
+        for (start, end) in self.dataset_ranges:
+            idxs = list(range(start, end))
+            if self.shuffle:
+                import random
+                random.shuffle(idxs)
+            # 按 batch_size 分组
+            for i in range(0, len(idxs), self.batch_size):
+                batch = idxs[i:i + self.batch_size]
+                if len(batch) == self.batch_size:
+                    indices.append(batch)
+        # 打乱 batch 顺序（可选）
+        if self.shuffle:
+            import random
+            random.shuffle(indices)
+        for batch in indices:
+            yield batch
+
+    def __len__(self):
+        total = 0
+        for ds in self.datasets:
+            total += len(ds) // self.batch_size
+        return total
+
+
+def create_test_loaders(base_dataset_configs: Dict[str, Dict], batch_size: int) -> Dict[str, DataLoader]:
+    """
+    创建多数据集测试数据加载器
+
+    Args:
+        base_dataset_configs: 各数据集的基础配置字典
+        batch_size: 测试集批处理大小
+
+    Returns:
+        Dict[str, DataLoader]: 测试集名称到 DataLoader 的映射
+    """
+    test_loaders = {}
+
+    for dataset_name, dataset_config in base_dataset_configs.items():
+        # 创建测试配置
+        test_config = dataset_config.copy()
+        test_config['train'] = False
+
+        # 创建测试数据集实例
+        test_dataset = SUPPORTED_DATASETS[dataset_name](**test_config)
+        test_dataset = DatasetWithSource(test_dataset, dataset_name=dataset_name.lower())
+        # 创建测试数据加载器
+        raw_test_loader = DataLoader(
+            test_dataset,
+            batch_size=batch_size,
+            shuffle=False,
+            num_workers=0
+        )
+
+        # 使用中间件创建统一格式的测试数据加载器
+        test_loaders[dataset_name] = create_unified_dataloader(raw_test_loader, dataset_name.lower())
+        print(f"  ✓ {dataset_name} 测试集: {len(test_dataset)} 样本")
+
+    return test_loaders
+
+
+def create_combined_dataloader(dataloaders_dict, shuffle=True, num_workers=12):
+    """
+    创建联合数据加载器，每个 batch 只包含同一数据集的数据
+    """
+    datasets = [dataloader.dataset for dataloader in dataloaders_dict.values()]
+    combined_dataset = ConcatDataset(datasets)
+    first_loader = list(dataloaders_dict.values())[0]
+    batch_size = first_loader.batch_size
+
+    sampler = GroupBatchSampler(datasets, batch_size, shuffle=shuffle)
+    return DataLoader(
+        combined_dataset,
+        batch_sampler=sampler,
+        num_workers=num_workers
+    )
