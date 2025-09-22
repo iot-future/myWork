@@ -71,10 +71,10 @@ model:
   
   # CLIP特有参数
   temperature: 0.07                        # 对比学习温度参数
-  freeze_classifier: true                   # 冻结分类器
+  freeze_classification_head: true                   # 冻结分类器
   # LoRA微调配置（默认关闭）
   lora:
-    enabled: false                         # 是否启用LoRA微调
+    enabled: true                         # 是否启用LoRA微调
     r: 16                                  # LoRA rank
     lora_alpha: 32                         # LoRA scaling参数
     lora_dropout: 0.1                      # LoRA dropout概率

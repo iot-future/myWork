@@ -30,6 +30,10 @@ class FederatedClient(BaseClient):
         self.learning_rate = learning_rate
         self.device = device or torch.device('cpu')
 
+    def get_parameters(self) -> Dict[str, Any]:
+        """获取模型参数"""
+        return self.model.get_parameters()
+
     def train(self, global_model_params: Dict[str, Any], show_progress: bool = False) -> Dict[str, Any]:
         """
         本地训练实现
@@ -93,7 +97,7 @@ class FederatedClient(BaseClient):
         avg_loss = total_loss / total_samples if total_samples > 0 else 0.0
 
         # 评估训练后的模型（获取准确率）
-        eval_metrics = self.evaluate_on_local_data()
+        eval_metrics = self.evaluate()
 
         return {
             'parameters': self.model.get_parameters(),
@@ -103,23 +107,15 @@ class FederatedClient(BaseClient):
             }
         }
 
-    def evaluate_on_local_data(self) -> Dict[str, float]:
-        """在本地数据上评估模型"""
+    def evaluate(self) -> Dict[str, float]:
+        """评估模型"""
         if self.test_loader is None:
             return {}
 
         try:
-            return self.model.evaluate_with_dataloader(self.test_loader)
+            return self.model.evaluate(self.test_loader)
         except Exception as e:
             print(f"⚠️  客户端 {self.client_id} 本地数据评估失败: {str(e)}")
-            return {}
-
-    def evaluate(self, test_data, test_labels):
-        """评估客户端模型"""
-        try:
-            return self.model.evaluate(test_data, test_labels)
-        except Exception as e:
-            print(f"⚠️  客户端 {self.client_id} 模型评估失败: {str(e)}")
             return {}
 
     def split_client_data_loader(self, data_loader, test_ratio=0.2):

@@ -30,6 +30,11 @@ class BaseClient(ABC):
         """
         pass
 
+    @abstractmethod
+    def get_parameters(self) -> Dict[str, Any]:
+        """获取模型参数"""
+        pass
+
 
 class BaseServer(ABC):
     """服务器基类"""
@@ -118,15 +123,6 @@ class BaseModel(ABC):
             # 默认返回 CPU
             return torch.device('cpu')
     
-    @abstractmethod
-    def get_parameters(self) -> Dict[str, Any]:
-        """获取模型参数"""
-        pass
-    
-    @abstractmethod
-    def set_parameters(self, params: Dict[str, Any]):
-        """设置模型参数"""
-        pass
     
     @abstractmethod
     def train_step(self, data, labels):
@@ -134,7 +130,7 @@ class BaseModel(ABC):
         pass
     
     @abstractmethod
-    def evaluate(self, data, labels):
+    def evaluate(self, dataloader):
         """模型评估"""
         pass
 

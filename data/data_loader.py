@@ -73,10 +73,8 @@ def _calculate_client_data_range(client_id: int, total_clients: int, total_items
     """
     items_per_client = total_items // total_clients
     start_idx = client_id * items_per_client
-
     # 最后一个客户端获得剩余的所有数据
     end_idx = total_items if client_id == total_clients - 1 else start_idx + items_per_client
-
     return start_idx, end_idx
 
 
@@ -226,13 +224,9 @@ def get_client_dataloaders(
     Returns:
         Dict[str, DataLoader]: 将数据集名称映射到相应 DataLoader 的字典
     """
-    # 初始化客户端数据加载器字典，用于存储该客户端的所有数据集的DataLoader
     client_dataloaders = {}
-
-    # 遍历每个请求的数据集配置
     for dataset_name, config in dataset_configs.items():
         # 为当前数据集创建专属于该客户端的DataLoader
-        # 注意：每次调用都会复制配置以避免修改原始配置
         dataloader = _create_single_client_dataloader(
             dataset_name=dataset_name,  # 数据集名称（如 'mnist', 'cifar10'）
             dataset_config=config.copy(),  # 数据集配置的副本，防止意外修改
@@ -243,12 +237,8 @@ def get_client_dataloaders(
             num_workers=num_workers,  # 数据加载进程数
             seed=seed  # 随机种子，确保数据分割的可复现性
         )
-
         # 将创建的DataLoader存储到结果字典中
-        # 键为数据集名称，值为对应的DataLoader实例
         client_dataloaders[dataset_name] = dataloader
-
-    # 返回包含所有数据集DataLoader的字典
     return client_dataloaders
 
 
@@ -306,7 +296,7 @@ class GroupBatchSampler(Sampler):
     """
 
     def __init__(self, datasets, batch_size, shuffle=True):
-        super().__init__()  # 推荐加上这一行
+        super().__init__()
         self.datasets = datasets
         self.batch_size = batch_size
         self.shuffle = shuffle

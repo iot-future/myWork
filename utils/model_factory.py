@@ -51,7 +51,7 @@ class ModelFactory:
                 model_name=model_config.get('model_name', 'openai/clip-vit-base-patch32'),
                 num_classes=model_config.get('num_classes', 10),
                 normalize_features=model_config.get('normalize_features', True),
-                freeze_classifier=model_config.get('freeze_classifier', True),
+                freeze_classification_head=model_config.get('freeze_classification_head', True),
                 cache_dir=model_config.get('cache_dir', None),
                 optimizer_config=optimizer_config,
                 lora_config=lora_config if lora_config.get('enabled', False) else None,

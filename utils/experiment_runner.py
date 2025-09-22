@@ -61,8 +61,7 @@ class ExperimentRunner:
         self.dataset_client_counts, self.dataset_client_mappings = count_clients_per_dataset(config)
 
         # 创建评估管理器
-        verbose = config.get('evaluation', {}).get('verbose', True)
-        self.evaluation_manager = EvaluationManager(verbose=verbose)
+        self.evaluation_manager = EvaluationManager()
 
         # 时间追踪变量
         self.experiment_start_time = None
@@ -249,8 +248,6 @@ class ExperimentRunner:
 
     def run_federated_round(self, round_num: int) -> Dict[str, float]:
         """执行一轮联邦学习"""
-        round_start_time = time.time()
-
         # 获取全局模型参数
         global_params = self.server.send_global_model()
 
@@ -261,29 +258,38 @@ class ExperimentRunner:
         # 检查是否显示详细进度（batch级别）
         show_batch_progress = self.config.get('training', {}).get('show_batch_progress', False)
 
-        with tqdm(self.clients, desc=f"第{round_num}轮训练",
-                  bar_format="{desc}: {percentage:3.0f}%|{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]",
-                  ncols=None, leave=False, position=1, file=sys.stdout) as pbar:
+        # 更美观的客户端进度条设置（使用手动更新以便动态描述）
+        with tqdm(total=len(self.clients),
+                  desc=f"第{round_num}轮 本地客户端",
+                  bar_format="{desc} |{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}] {postfix}",
+                  ncols=120,
+                  leave=False,
+                  position=1,
+                  dynamic_ncols=True,
+                  colour='cyan') as pbar:
 
-            for _, client in enumerate(pbar):
-                # 传递show_progress参数以启用batch级别的进度条
+            for client in self.clients:
+                # 在进度条上显示当前客户端 id
+                pbar.set_description(f"第{round_num}轮 客户:{client.client_id}")
+
+                # 传递show_progress参数以启用batch级别的进度条（client.train 应该处理该参数）
                 client_result = client.train(global_params, show_progress=show_batch_progress)
                 client_updates.append(client_result)
 
                 # 收集客户端评估指标
                 metrics = client_result.get('metrics', {})
                 client_metrics[client.client_id] = metrics
-                
-                # 打印客户端指标
-                if show_batch_progress:
-                    print(f"客户端 {client.client_id} 准确率: {metrics.get('accuracy', 0) * 100:.2f}%, 损失: {metrics.get('loss', 0):.4f}")
 
-                # 简化的进度信息
-                loss = client_result.get('metrics', {}).get('loss', 0)
-                pbar.set_postfix({'Loss': f'{loss:.3f}'})
+                # 使用 pbar.write 输出信息，避免打断 tqdm 显示
+                pbar.write(f"客户端 {client.client_id} — 精度: {metrics.get('accuracy', 0) * 100:.2f}%, 损失: {metrics.get('loss', 0):.4f}")
 
-                # 刷新显示以避免重叠
-                pbar.refresh()
+                # 简化的进度信息显示在 postfix 中
+                loss = metrics.get('loss', 0)
+                acc = metrics.get('accuracy', 0)
+                pbar.set_postfix({'Loss': f'{loss:.3f}', 'Acc': f'{acc*100:.2f}%'})
+
+                # 更新进度条计数
+                pbar.update(1)
 
                 # 记录客户端指标到wandb
                 if self.use_wandb and 'metrics' in client_result:
@@ -303,7 +309,7 @@ class ExperimentRunner:
         if round_num % self.config['evaluation']['evaluate_every'] == 0:
             # 评估全局模型
             global_metrics = self.evaluation_manager.evaluate_global_model(
-                self.server, self.test_loaders, round_num
+                self.server, self.test_loaders
             )
 
             # 创建评估结果
@@ -354,7 +360,7 @@ class ExperimentRunner:
         lora_enabled = hasattr(self.server.global_model,
                                'is_lora_enabled') and self.server.global_model.is_lora_enabled()
         if lora_enabled:
-            initial_lora_params = self.server.global_model.get_parameters()
+            initial_lora_params = self.server.get_global_model_parameters()
             lora_param_count = len([k for k in initial_lora_params.keys() if 'lora_' in k])
             print(f"🔄 LoRA训练模式: {lora_param_count} 个LoRA参数层将被优化")
 

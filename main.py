@@ -3,7 +3,6 @@
 联邦学习实验入口文件
 """
 
-import yaml
 from utils.config_manager import ConfigManager
 from utils.experiment_runner import ExperimentRunner
 from utils.results_handler import ResultsHandler

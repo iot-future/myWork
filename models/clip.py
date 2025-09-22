@@ -3,7 +3,7 @@ CLIP模型实现，支持联邦学习框架
 基于Hugging Face transformers库，解耦架构设计
 参考论文：Learning Transferable Visual Representations with Natural Language Supervision
 """
-
+from copy import deepcopy
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -22,7 +22,7 @@ from models.classificationHead import (
 # LoRA相关导入将在下面条件导入
 
 try:
-    from lora.clip_lora import CLIPLoRAWrapper
+    from lora.loRA_wrapper import LoRAWrapper
 
     LORA_AVAILABLE = True
 except ImportError as e:
@@ -251,7 +251,7 @@ class FederatedCLIPModel(BaseModel, DeviceMixin):
                  model_name: str = "openai/clip-vit-base-patch32",
                  num_classes: int = 10,
                  normalize_features: bool = True,
-                 freeze_classifier: bool = True,
+                 freeze_classification_head: bool = True,
                  cache_dir: Optional[str] = None,
                  optimizer_config: Optional[Dict[str, Any]] = None,
                  checkpoint_path: Optional[str] = None,
@@ -301,23 +301,23 @@ class FederatedCLIPModel(BaseModel, DeviceMixin):
         self._device_cache = None
         self._device_cache_dirty = True
 
+        # 如果需要冻结编码器
+        if freeze_classification_head:
+            self.classifier.freeze_head()
+
+        # 尝试使用提供的配置创建优化器
+        self.create_optimizer(self.classifier.parameters())
+
         # 应用LoRA（如果配置中启用）
         if self.lora_config.get('enabled', False) and LORA_AVAILABLE:
             self._setup_lora()
 
             # LoRA启用后，重新创建优化器以包含LoRA参数和分类头参数
             if self._lora_enabled:
-                lora_params = [p for p in self.image_encoder.parameters() if p.requires_grad]
-                classifier_params = [p for p in self.classification_head.parameters() if p.requires_grad]
+                lora_params = [p for p in self.classifier.image_encoder.parameters() if p.requires_grad]
+                classifier_params = [p for p in self.classifier.classification_heads.parameters() if p.requires_grad]
                 all_trainable_params = lora_params + classifier_params
                 self.create_optimizer(all_trainable_params)
-
-        # 如果需要冻结编码器
-        if freeze_classifier:
-            self.classifier.freeze_head()
-
-        # 尝试使用提供的配置创建优化器
-        self.create_optimizer(self.classifier.parameters())
 
         # 如果提供了checkpoint路径，加载预训练权重
         if checkpoint_path is not None:
@@ -334,10 +334,10 @@ class FederatedCLIPModel(BaseModel, DeviceMixin):
 
         try:
             # 创建LoRA包装器
-            self.lora_wrapper = CLIPLoRAWrapper(vision_model=self.classifier.image_encoder)
+            self.lora_wrapper = LoRAWrapper(model=self.classifier.image_encoder)
 
             # 简化配置处理
-            vision_config = {
+            image_config = {
                 'r': self.lora_config.get('r', 16),
                 'lora_alpha': self.lora_config.get('lora_alpha', 32),
                 'lora_dropout': self.lora_config.get('lora_dropout', 0.1),
@@ -345,7 +345,7 @@ class FederatedCLIPModel(BaseModel, DeviceMixin):
             }
 
             # 应用LoRA
-            self.lora_wrapper.apply_lora(vision_config=vision_config)
+            self.lora_wrapper.apply_lora(**image_config)
             self._lora_enabled = True
 
             # # 输出关键的LoRA统计信息
@@ -382,9 +382,11 @@ class FederatedCLIPModel(BaseModel, DeviceMixin):
                 for name, param in self.image_encoder.named_parameters()
                 if param.requires_grad
             }
-
+        
     def set_parameters(self, params: Dict[str, torch.Tensor]):
         """设置模型参数 - 联邦学习核心功能"""
+        # TODO: 这里需要修改，查看参数形状
+        params = deepcopy(params)  # 深拷贝参数
         if self._lora_enabled and self.lora_wrapper is not None:
             # LoRA模式：设置LoRA参数
             self.lora_wrapper.set_lora_parameters(params)
@@ -417,12 +419,13 @@ class FederatedCLIPModel(BaseModel, DeviceMixin):
         loss = self.criterion(outputs, labels)
         loss.backward()
 
+        # 对图像编码器的梯度进行裁剪，防止梯度爆炸（max_norm=1.0）
         torch.nn.utils.clip_grad_norm_(self.image_encoder.parameters(), max_norm=1.0)
         self.optimizer.step()
 
         return loss.item()
 
-    def evaluate_with_dataloader(self, data_loader) -> Dict[str, float]:
+    def evaluate(self, data_loader) -> Dict[str, float]:
         """使用数据加载器评估模型"""
         self.classifier.eval()
         total_loss = 0.0
@@ -546,23 +549,3 @@ class FederatedCLIPModel(BaseModel, DeviceMixin):
             'trainable_parameters': self.lora_wrapper.get_trainable_parameters(),
             'config': self.lora_config
         }
-
-    def _compute_metrics(self, outputs: torch.Tensor, labels: torch.Tensor, loss: torch.Tensor) -> Dict[str, float]:
-        """计算评估指标的通用方法"""
-        pass
-
-    def evaluate(self, data: torch.Tensor, labels: torch.Tensor, dataset_name: str = None) -> Dict[str, float]:
-        """模型评估"""
-        pass
-
-    def predict(self, data: torch.Tensor, dataset_name: str = None) -> torch.Tensor:
-        """预测"""
-        pass
-
-    def predict_proba(self, data: torch.Tensor, dataset_name: str = None) -> torch.Tensor:
-        """预测概率"""
-        pass
-
-    def get_features(self, data: torch.Tensor) -> torch.Tensor:
-        """提取特征"""
-        pass
