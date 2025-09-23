@@ -5,7 +5,7 @@ LoRA 基础包装器模块
 from typing import Dict, Any, Optional
 import torch
 from peft import LoraConfig, get_peft_model
-
+from copy import deepcopy
 TORCH_AVAILABLE = True
 
 
@@ -75,7 +75,7 @@ class LoRAWrapper:
         """获取LoRA参数
         
         Returns:
-            LoRA参数字典，只包含LoRA相关的参数
+            LoRA参数字典，只包含LoRA相关的参数，结构为 {参数名: 参数值}
         """
         if not self._is_lora_applied or self.model is None:
             return {}
@@ -102,7 +102,9 @@ class LoRAWrapper:
         if not self._is_lora_applied or self.model is None:
             print("LoRA is not applied. Cannot set LoRA parameters.")
             return
-
+        
+        # 深拷贝LoRA参数，以避免修改原始参数，但是copy_本身是in-place操作，用于以防万一
+        lora_params = deepcopy(lora_params)
         with torch.no_grad():
             for name, param in self.model.named_parameters():
                 if name in lora_params and param.requires_grad:
