@@ -200,7 +200,6 @@ svhn_template = [
     lambda c: f'a photo of the number: "{c}".',
 ]
 
-
 dataset_to_template = {
     'Cars': cars_template,
     'CIFAR10': cifar10_template,
@@ -219,7 +218,4 @@ dataset_to_template = {
 
 
 def get_templates(dataset_name):
-    if dataset_name.endswith('Val'):
-        return get_templates(dataset_name.replace('Val', ''))
-    assert dataset_name in dataset_to_template, f'Unsupported dataset: {dataset_name}'
     return dataset_to_template[dataset_name]

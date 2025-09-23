@@ -28,7 +28,7 @@ learning_rates:
 # ==============================
 wandb:
   enabled: false                           # 关闭WandB，简化调试
-  project: "federated-learning"            # WandB项目名称
+  experiment_name: "federated-learning"            # WandB项目名称
   offline: false                           # 不使用离线模式
 
 # ==============================

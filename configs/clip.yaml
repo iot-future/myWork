@@ -18,37 +18,37 @@ device: "auto"  # auto: 自动检测GPU, cuda: 强制GPU, cpu: 强制CPU
 # 学习率配置 - 统一管理所有学习率设置
 # ==============================
 learning_rates:
-  client: 0.00005                          # CLIP客户端学习率（较小）
+  client: 0.00005                        # CLIP客户端学习率（较小）
   server: 1.0                              # 服务器聚合学习率
-  model: 0.00005                           # CLIP模型训练学习率
-  optimizer: 5e-5                          # CLIP优化器学习率
+  model: 0.00005                          # CLIP模型训练学习率
+  optimizer: 0.00005                       # CLIP优化器学习率
 
 # ==============================
 # 分布式训练和日志配置
 # ==============================
 wandb:
-  enabled: true                            # 启用WandB，记录CLIP训练过程
-  project: "clip-federated-learning"       # 专门的CLIP项目
-  offline: true                            # 离线模式
+  enabled: false                            # 启用WandB，记录CLIP训练过程
+  experiment_name: "clip_no_freeze_classifier"       # 专门的CLIP项目
+  offline: false                            # 离线模式
 
 # ==============================
 # 客户端配置
 # ==============================
 client:
   num_clients: 4                           # 客户端数量
-  local_epochs: 2                          # CLIP训练使用较少的本地轮数
+  local_epochs: 1                          # CLIP训练使用较少的本地轮数
   
   # 客户端数据集分配 - 支持多模态数据
   client_datasets:
     client_0:
-      - mnist                              # 单模态数据
+      - mnist                              # 混合数据集
+      - cifar10                           # 单模态数据
     client_1:
-      - mnist
+      - cifar10
     client_2:
       - cifar10                            # 不同的视觉数据
     client_3:
       - mnist                              # 混合数据集
-      - cifar10
 
 # ==============================
 # 服务器配置
@@ -71,12 +71,10 @@ model:
   
   # CLIP特有参数
   temperature: 0.07                        # 对比学习温度参数
-  freeze_vision_encoder: false             # 是否冻结视觉编码器
-  freeze_text_encoder: false               # 是否冻结文本编码器
-  
+  freeze_classification_head: true                   # 冻结分类器
   # LoRA微调配置（默认关闭）
   lora:
-    enabled: false                         # 是否启用LoRA微调
+    enabled: true                         # 是否启用LoRA微调
     r: 16                                  # LoRA rank
     lora_alpha: 32                         # LoRA scaling参数
     lora_dropout: 0.1                      # LoRA dropout概率
@@ -109,7 +107,7 @@ data:
   batch_size: 32                           # 较小批次，适合CLIP大模型
   num_workers: 2                           # 数据加载器工作进程数
   
-  # 具体数据集配置
+# 具体数据集配置
   datasets:
     mnist:
       train: true                          # MNIST数据集

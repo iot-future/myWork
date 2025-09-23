@@ -22,9 +22,9 @@ def init_wandb(config: Dict[str, Any], project_name: str = "federated-learning",
     else:
         os.environ['HTTP_PROXY'] = 'http://127.0.0.1:7890'
         os.environ['HTTPS_PROXY'] = 'http://127.0.0.1:7890'
-    
-    experiment_name = config.get('experiment', {}).get('name', 'fl_experiment')
-    
+
+    experiment_name = config.get('wandb', {}).get('experiment_name', 'fl_experiment')
+
     wandb.init(
         project=project_name,
         name=experiment_name,

@@ -18,9 +18,9 @@ learning_rates:
   optimizer: 5e-5                          # CLIP LoRA优化器学习率
 
 wandb:
-  enabled: true
-  project: "clip-lora-federated-learning"
-  offline: true
+  enabled: false
+  experiment_name: "clip-lora-federated-learning"
+  offline: false
 
 client:
   num_clients: 4
@@ -43,7 +43,10 @@ model:
   model_name: "openai/clip-vit-base-patch32"
   cache_dir: "/home/zzm/checkpoint"
   use_pretrained: true
-  
+
+  # CLIP特有参数
+  temperature: 0.07                        # 对比学习温度参数
+  freeze_classification_head: true                   # 冻结分类器
   # LoRA配置
   lora:
     enabled: true

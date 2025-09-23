@@ -205,7 +205,7 @@ def main():
         'max_samples': 25000,
         'lora_r': 8,
         'lora_alpha': 16,
-        'learning_rate': 1e-4,
+        'learning_rate': 2e-5,  # 降低学习率
         'epochs': 5,
         'data_root': '/home/zzm/dataset',  # CIFAR-10数据集路径
         'model_name': "openai/clip-vit-base-patch32",

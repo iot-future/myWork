@@ -3,7 +3,6 @@
 联邦学习实验入口文件
 """
 
-import yaml
 from utils.config_manager import ConfigManager
 from utils.experiment_runner import ExperimentRunner
 from utils.results_handler import ResultsHandler
@@ -40,7 +39,7 @@ def main():
     
     data_info = f"批大小: {config['data']['batch_size']}"
     if config.get('wandb', {}).get('enabled', False):
-        data_info += f" | WandB项目: {config['wandb']['project']}"
+        data_info += f" | WandB项目: {config['wandb']['experiment_name']}"
     print(data_info)
     print("=" * 60)
     

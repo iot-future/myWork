@@ -5,19 +5,35 @@ from .base import BaseClient
 from utils.device_manager import device_manager
 from tqdm import tqdm
 import sys
+from torch.utils.data import random_split, DataLoader
 
 
 class FederatedClient(BaseClient):
-    """联邦学习客户端实现"""
-    
+    """联邦学习客户端实现
+
+    Args: 
+        client_id (str): 客户端的唯一标识符。 
+        model: 客户端使用的模型。 
+        data_loader: 所有数据加载器，默认为None。 
+        epochs (int): 训练轮数，默认为1。 
+        learning_rate (float): 学习率，默认为0.01。 
+        device: 训练设备，默认为CPU。 
+    """
+
     def __init__(self, client_id: str, model, data_loader=None, epochs=1, learning_rate=0.01, device=None):
         super().__init__(client_id)
         self.model = model
-        self.data_loader = data_loader
+        # 划分训练集和测试集
+        self.train_loader, self.test_loader = self.split_client_data_loader(data_loader, test_ratio=0.2)
+
         self.epochs = epochs
         self.learning_rate = learning_rate
         self.device = device or torch.device('cpu')
-    
+
+    def get_parameters(self) -> Dict[str, Any]:
+        """获取模型参数"""
+        return self.model.get_parameters()
+
     def train(self, global_model_params: Dict[str, Any], show_progress: bool = False) -> Dict[str, Any]:
         """
         本地训练实现
@@ -25,17 +41,17 @@ class FederatedClient(BaseClient):
         """
         if global_model_params:
             self.model.set_parameters(global_model_params)
-        
-        if self.data_loader is None:
+
+        if self.train_loader is None:
             raise ValueError("Data loader not set")
-        
+
         # 执行本地训练并收集训练指标
         total_loss = 0.0
         total_samples = 0
-        
+
         # 计算总的batch数量
-        total_batches = len(self.data_loader) * self.epochs
-        
+        total_batches = len(self.train_loader) * self.epochs
+
         # 创建batch级别的进度条
         if show_progress:
             batch_pbar = tqdm(
@@ -48,18 +64,18 @@ class FederatedClient(BaseClient):
                 file=sys.stdout,
                 bar_format="{desc}: {percentage:3.0f}%|{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]"
             )
-        
+
         for epoch in range(self.epochs):
-            for batch_data, batch_labels in self.data_loader:
+            for batch_data, batch_labels, dataset_names in self.train_loader:
                 # 将数据移到设备
                 batch_data, batch_labels = device_manager.move_tensors_to_device(
                     batch_data, batch_labels, device=self.device
                 )
-                
-                loss = self.model.train_step(batch_data, batch_labels)
+
+                loss = self.model.train_step(batch_data, batch_labels, dataset_names)
                 total_loss += loss * batch_data.size(0)
                 total_samples += batch_data.size(0)
-                
+
                 # 更新batch进度条
                 if show_progress:
                     avg_loss = total_loss / total_samples if total_samples > 0 else 0.0
@@ -69,20 +85,20 @@ class FederatedClient(BaseClient):
                     })
                     batch_pbar.update(1)
                     batch_pbar.refresh()  # 刷新显示
-        
+
         # 关闭batch进度条
         if show_progress:
             batch_pbar.close()
             # 确保进度条完全清除
             import time
             time.sleep(0.01)
-        
+
         # 计算平均损失
         avg_loss = total_loss / total_samples if total_samples > 0 else 0.0
-        
+
         # 评估训练后的模型（获取准确率）
-        eval_metrics = self.evaluate_on_local_data()
-        
+        eval_metrics = self.evaluate()
+
         return {
             'parameters': self.model.get_parameters(),
             'metrics': {
@@ -90,26 +106,36 @@ class FederatedClient(BaseClient):
                 'accuracy': eval_metrics.get('accuracy')
             }
         }
-    
-    def evaluate_on_local_data(self) -> Dict[str, float]:
-        """在本地数据上评估模型"""
-        if self.data_loader is None:
+
+    def evaluate(self) -> Dict[str, float]:
+        """评估模型"""
+        if self.test_loader is None:
             return {}
-        
+
         try:
-            return self.model.evaluate_with_dataloader(self.data_loader)
+            return self.model.evaluate(self.test_loader)
         except Exception as e:
             print(f"⚠️  客户端 {self.client_id} 本地数据评估失败: {str(e)}")
             return {}
-    
-    def set_data(self, data_loader):
-        """设置数据加载器"""
-        self.data_loader = data_loader
-    
-    def evaluate(self, test_data, test_labels):
-        """评估客户端模型"""
-        try:
-            return self.model.evaluate(test_data, test_labels)
-        except Exception as e:
-            print(f"⚠️  客户端 {self.client_id} 模型评估失败: {str(e)}")
-            return {}
+
+    def split_client_data_loader(self, data_loader, test_ratio=0.2):
+        """
+        将客户端数据划分为训练集和测试集
+        Args:
+            data_loader: 所有数据加载器
+            test_ratio: 测试集比例
+        Returns:
+            train_loader, test_loader
+        """
+        dataset = data_loader.dataset
+        total_size = len(dataset)
+        test_size = int(total_size * test_ratio)
+        train_size = total_size - test_size
+
+        train_dataset, test_dataset = random_split(dataset, [train_size, test_size])
+
+        batch_size = data_loader.batch_size \
+            if data_loader.batch_size is not None else data_loader.batch_sampler.batch_size
+        train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+        test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+        return train_loader, test_loader

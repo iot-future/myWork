@@ -15,14 +15,13 @@ from tqdm import tqdm
 
 from core.server import FederatedServer
 from core.client import FederatedClient
-from data.data_loader import get_client_dataloaders
 from aggregation.federated_avg import FederatedAveraging
 from utils.model_factory import ModelFactory
 from utils.results_handler import ResultsHandler
 from utils.wandb_logger import init_wandb, log_client_metrics, log_global_metrics, finish_wandb
 from utils.dataset_stats import count_clients_per_dataset
 from utils.evaluation_manager import EvaluationManager
-from data.data_loader import SUPPORTED_DATASETS
+from data.data_loader import get_client_dataloaders, create_test_loaders, create_combined_dataloader
 from data.middleware import create_unified_dataloader
 from utils.device_manager import device_manager
 
@@ -60,11 +59,10 @@ class ExperimentRunner:
         self.use_wandb = config.get('wandb', {}).get('enabled', False)
         self.device = None
         self.dataset_client_counts, self.dataset_client_mappings = count_clients_per_dataset(config)
-        
+
         # 创建评估管理器
-        verbose = config.get('evaluation', {}).get('verbose', True)
-        self.evaluation_manager = EvaluationManager(verbose=verbose)
-        
+        self.evaluation_manager = EvaluationManager()
+
         # 时间追踪变量
         self.experiment_start_time = None
         self.round_times = []
@@ -106,7 +104,8 @@ class ExperimentRunner:
 
         # 获取每个数据集的路径等基本信息
         base_dataset_configs = {
-            dataset_name: {'data_root': data_root} if dataset_config is None else {'data_root': data_root, **dataset_config}
+            dataset_name: {'data_root': data_root} if dataset_config is None else {'data_root': data_root,
+                                                                                   **dataset_config}
             for dataset_name, dataset_config in data_config['datasets'].items()
         }
 
@@ -139,7 +138,7 @@ class ExperimentRunner:
             client_data_loaders.append(client_dataloaders_dict)
 
         # 创建多数据集测试数据加载器
-        self.test_loaders = self._create_test_loaders(base_dataset_configs, batch_size)
+        self.test_loaders = create_test_loaders(base_dataset_configs, batch_size)
 
         # 计算并打印数据统计信息
         self._print_data_statistics(client_data_loaders, num_clients)
@@ -152,32 +151,7 @@ class ExperimentRunner:
 
         return client_data_loaders
 
-    def _create_test_loaders(self, base_dataset_configs: Dict[str, Dict], batch_size: int) -> Dict[str, DataLoader]:
-        """创建多数据集测试数据加载器"""
-        test_loaders = {}
-        
-        for dataset_name, dataset_config in base_dataset_configs.items():
-            # 创建测试配置
-            test_config = dataset_config.copy()
-            test_config['train'] = False
-            
-            # 创建测试数据集实例
-            test_dataset = SUPPORTED_DATASETS[dataset_name](**test_config)
-            
-            # 创建测试数据加载器
-            raw_test_loader = DataLoader(
-                test_dataset, 
-                batch_size=batch_size, 
-                shuffle=False,
-                num_workers=0
-            )
-            
-            # 使用中间件创建统一格式的测试数据加载器
-            test_loaders[dataset_name] = create_unified_dataloader(raw_test_loader, dataset_name.lower())
-            print(f"  ✓ {dataset_name} 测试集: {len(test_dataset)} 样本")
-            
-        return test_loaders
-    
+
     def _prepare_test_config(self, dataset_config: Dict[str, Any]) -> Dict[str, Any]:
         """准备测试数据集配置"""
         test_config = dataset_config.copy()
@@ -200,23 +174,25 @@ class ExperimentRunner:
             datasets_str = ", ".join(dataset_info)
             print(f"  客户端 {client_id}: {datasets_str} - 总计 {total_client_samples} 样本")
 
-    def setup_server(self):
+    def setup_server(self, dataset_names: List[str]):
         """设置服务器"""
         optimizer_config = self.config.get('optimizer', {})
         global_model = ModelFactory.create_model(
             self.config['model'],
-            optimizer_config if optimizer_config else None
+            optimizer_config if optimizer_config else None,
+            dataset_names=dataset_names,
+            device=self.device
         )
 
         # 将模型移到设备
         global_model = device_manager.move_model_to_device(global_model, self.device)
-        
+
         # 添加LoRA状态验证
         if hasattr(global_model, 'is_lora_enabled') and global_model.is_lora_enabled():
             lora_info = global_model.get_lora_info()
             print(f"🎯 全局模型LoRA状态: 已启用 | 可训练参数: {lora_info.get('trainable_parameters', 0):,}")
         elif hasattr(global_model, 'is_lora_enabled'):
-            print("📸 全局模型: 标准微调模式")
+            print("📸 全局模型: 正常训练")
 
         # 创建聚合器和服务器
         aggregator = FederatedAveraging()
@@ -227,29 +203,33 @@ class ExperimentRunner:
         """设置客户端"""
         client_config = self.config['client']
         optimizer_config = self.config.get('optimizer', {})
-        
+
         print(f"\n🔧 开始设置 {len(client_data_loaders)} 个客户端...")
 
         self.clients = []
         lora_clients_count = 0
-        
+
         for i, dataloaders_dict in enumerate(client_data_loaders):
             client_id = f"client_{i}"
+            # 从数据加载器字典中提取数据集名称
+            client_dataset_names = list(dataloaders_dict.keys())
             client_model = ModelFactory.create_model(
                 self.config['model'],
-                optimizer_config if optimizer_config else None
+                optimizer_config if optimizer_config else None,
+                dataset_names=client_dataset_names,
+                device=self.device
             )
 
             # 将客户端模型移到设备
             client_model = device_manager.move_model_to_device(client_model, self.device)
-            
+
             # 统计LoRA启用的客户端数量
             if hasattr(client_model, 'is_lora_enabled') and client_model.is_lora_enabled():
                 lora_clients_count += 1
 
             # 处理数据加载器：单数据集或多数据集
             data_loader = (list(dataloaders_dict.values())[0] if len(dataloaders_dict) == 1
-                           else self._create_combined_dataloader(dataloaders_dict))
+               else create_combined_dataloader(dataloaders_dict))
 
             client = FederatedClient(
                 client_id=client_id,
@@ -265,49 +245,51 @@ class ExperimentRunner:
         if lora_clients_count > 0:
             print(f"🎯 LoRA启用客户端: {lora_clients_count}/{len(self.clients)}")
 
-    def _create_combined_dataloader(self, dataloaders_dict):
-        """创建联合数据加载器，将多个数据集合并为一个数据加载器"""
-        datasets = [dataloader.dataset for dataloader in dataloaders_dict.values()]
-        combined_dataset = ConcatDataset(datasets)
-
-        # 使用第一个数据加载器的配置参数
-        first_loader = list(dataloaders_dict.values())[0]
-
-        return DataLoader(
-            combined_dataset,
-            batch_size=first_loader.batch_size,
-            shuffle=True,
-            num_workers=0
-        )
 
     def run_federated_round(self, round_num: int) -> Dict[str, float]:
         """执行一轮联邦学习"""
-        round_start_time = time.time()
-        
         # 获取全局模型参数
         global_params = self.server.send_global_model()
 
         # 所有客户端进行本地训练 - 使用嵌套的进度条
         client_updates = []
-        
+        client_metrics = {}  # 用于收集每个客户端的评估结果
+
         # 检查是否显示详细进度（batch级别）
-        show_batch_progress = self.config.get('training', {}).get('show_batch_progress', True)
-        
-        with tqdm(self.clients, desc=f"第{round_num}轮训练", 
-                  bar_format="{desc}: {percentage:3.0f}%|{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]",
-                  ncols=None, leave=False, position=1, file=sys.stdout) as pbar:
-            
-            for i, client in enumerate(pbar):
-                # 传递show_progress参数以启用batch级别的进度条
+        show_batch_progress = self.config.get('training', {}).get('show_batch_progress', False)
+
+        # 更美观的客户端进度条设置（使用手动更新以便动态描述）
+        with tqdm(total=len(self.clients),
+                  desc=f"第{round_num}轮 本地客户端",
+                  bar_format="{desc} |{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}] {postfix}",
+                  ncols=120,
+                  leave=False,
+                  position=1,
+                  dynamic_ncols=True,
+                  colour='cyan') as pbar:
+
+            for client in self.clients:
+                # 在进度条上显示当前客户端 id
+                pbar.set_description(f"第{round_num}轮 客户:{client.client_id}")
+
+                # 传递show_progress参数以启用batch级别的进度条（client.train 应该处理该参数）
                 client_result = client.train(global_params, show_progress=show_batch_progress)
                 client_updates.append(client_result)
-                
-                # 简化的进度信息
-                loss = client_result.get('metrics', {}).get('loss', 0)
-                pbar.set_postfix({'Loss': f'{loss:.3f}'})
-                
-                # 刷新显示以避免重叠
-                pbar.refresh()
+
+                # 收集客户端评估指标
+                metrics = client_result.get('metrics', {})
+                client_metrics[client.client_id] = metrics
+
+                # 使用 pbar.write 输出信息，避免打断 tqdm 显示
+                pbar.write(f"客户端 {client.client_id} — 精度: {metrics.get('accuracy', 0) * 100:.2f}%, 损失: {metrics.get('loss', 0):.4f}")
+
+                # 简化的进度信息显示在 postfix 中
+                loss = metrics.get('loss', 0)
+                acc = metrics.get('accuracy', 0)
+                pbar.set_postfix({'Loss': f'{loss:.3f}', 'Acc': f'{acc*100:.2f}%'})
+
+                # 更新进度条计数
+                pbar.update(1)
 
                 # 记录客户端指标到wandb
                 if self.use_wandb and 'metrics' in client_result:
@@ -325,27 +307,24 @@ class ExperimentRunner:
         # 评估（使用新的评估管理器）
         metrics = {}
         if round_num % self.config['evaluation']['evaluate_every'] == 0:
-            # 评估客户端本地模型
-            client_metrics = self.evaluation_manager.evaluate_clients(self.clients, round_num)
-            
             # 评估全局模型
             global_metrics = self.evaluation_manager.evaluate_global_model(
-                self.server, self.test_loaders, round_num
+                self.server, self.test_loaders
             )
-            
+
             # 创建评估结果
             eval_result = self.evaluation_manager.create_evaluation_result(
                 round_num, client_metrics, global_metrics
             )
-            
+
             # 打印轮次总结
             progress_msg = self.evaluation_manager.format_round_summary(eval_result)
             print(progress_msg)
-            
+
             # 记录全局模型指标到wandb
             if self.use_wandb and global_metrics:
                 log_global_metrics(round_num, global_metrics)
-                
+
             metrics = global_metrics
 
         return metrics
@@ -357,7 +336,7 @@ class ExperimentRunner:
 
         # 初始化wandb
         if self.use_wandb:
-            project_name = self.config.get('wandb', {}).get('project', 'federated-learning')
+            project_name = self.config.get('experiment', {}).get('name', 'federated-learning')
             is_offline = self.config.get('wandb', {}).get('offline', False)
             init_wandb(self.config, project_name, is_offline)
 
@@ -368,7 +347,7 @@ class ExperimentRunner:
         client_data_loaders = self.setup_data()
 
         # 设置服务器和客户端
-        self.setup_server()
+        self.setup_server(list(self.test_loaders.keys()))
         self.setup_clients(client_data_loaders)
 
         print("\n开始联邦学习训练...")
@@ -376,27 +355,28 @@ class ExperimentRunner:
         rounds = self.config['experiment']['rounds']
         all_metrics = []
         self.experiment_start_time = time.time()
-        
+
         # 在训练开始前记录LoRA参数状态（如果启用）
-        lora_enabled = hasattr(self.server.global_model, 'is_lora_enabled') and self.server.global_model.is_lora_enabled()
+        lora_enabled = hasattr(self.server.global_model,
+                               'is_lora_enabled') and self.server.global_model.is_lora_enabled()
         if lora_enabled:
-            initial_lora_params = self.server.global_model.get_parameters()
+            initial_lora_params = self.server.get_global_model_parameters()
             lora_param_count = len([k for k in initial_lora_params.keys() if 'lora_' in k])
             print(f"🔄 LoRA训练模式: {lora_param_count} 个LoRA参数层将被优化")
 
         # 使用总体进度条
-        with tqdm(range(1, rounds + 1), desc="实验进度", unit="轮", 
+        with tqdm(range(1, rounds + 1), desc="实验进度", unit="轮",
                   position=0, file=sys.stdout, ncols=None) as round_pbar:
             for round_num in round_pbar:
                 metrics = self.run_federated_round(round_num)
                 if metrics:
                     metrics['round'] = round_num
                     all_metrics.append(metrics)
-                
+
                 # 更新总体进度条
                 if metrics and 'accuracy' in metrics:
                     round_pbar.set_postfix({'Acc': f"{metrics['accuracy']:.2f}%"})
-                
+
                 # 在最后一轮验证LoRA参数更新
                 if lora_enabled and round_num == rounds:
                     current_lora_params = self.server.global_model.get_parameters()
@@ -414,21 +394,21 @@ class ExperimentRunner:
             finish_wandb()
 
         return all_metrics
-    
+
     def _print_final_summary(self):
         """打印最终实验总结"""
         summary = self.evaluation_manager.get_final_summary()
         if not summary:
             print("⚠️  没有可用的实验结果")
             return
-            
+
         print(f"\n📊 实验总结:")
         print(f"总训练轮次: {summary['total_rounds']}")
         print(f"最终准确率: {summary['final_accuracy']:.2f}%")
         print(f"最终损失: {summary['final_loss']:.4f}")
-        
+
         if summary['total_rounds'] > 1:
             print(f"准确率提升: +{summary['accuracy_improvement']:.2f}%")
             print(f"损失降低: -{summary['loss_reduction']:.4f}")
-            
+
         print(f"参与客户端: {summary['client_count']} 个")
