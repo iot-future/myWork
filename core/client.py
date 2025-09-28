@@ -5,7 +5,37 @@ from .base import BaseClient
 from utils.device_manager import device_manager
 from tqdm import tqdm
 import sys
-from torch.utils.data import random_split, DataLoader
+from torch.utils.data import random_split, DataLoader, TensorDataset, Subset
+from data.data_loader import GroupBatchSampler
+
+
+def split_client_data_loader(data_loader, train_ratio=0.8):
+    """
+    将客户端数据划分为训练集和测试集
+    Args:
+        data_loader: 所有数据加载器
+        train_ratio: 训练集比例
+    Returns:
+        train_loader, test_loader
+    """
+    dataset = data_loader.dataset
+    # 如果数据集不是ConcatDataset，则直接使用random_split划分
+    if not isinstance(dataset, torch.utils.data.ConcatDataset):
+        total_size = len(dataset)
+        train_size = int(total_size * train_ratio)
+        test_size = total_size - train_size
+        train_datasets, test_datasets = random_split(dataset=dataset,lengths=[train_size, test_size])
+        train_loader = DataLoader(train_datasets, batch_size=data_loader.batch_size, shuffle=True, num_workers=data_loader.num_workers)
+        test_loader = DataLoader(test_datasets, batch_size=data_loader.batch_size, shuffle=False, num_workers=data_loader.num_workers)
+        return train_loader, test_loader
+    
+    # 如果数据集是ConcatDataset，则使用GroupBatchSampler
+    train_sampler = GroupBatchSampler(dataset, data_loader.batch_size, train=True, train_ratio=train_ratio, shuffle=True)
+    test_sampler = GroupBatchSampler(dataset, data_loader.batch_size, train=False, train_ratio=train_ratio, shuffle=False)
+    train_loader = DataLoader(dataset, batch_sampler=train_sampler, num_workers=data_loader.num_workers)
+    test_loader = DataLoader(dataset, batch_sampler=test_sampler, num_workers=data_loader.num_workers)
+    
+    return train_loader, test_loader
 
 
 class FederatedClient(BaseClient):
@@ -24,7 +54,7 @@ class FederatedClient(BaseClient):
         super().__init__(client_id)
         self.model = model
         # 划分训练集和测试集
-        self.train_loader, self.test_loader = self.split_client_data_loader(data_loader, test_ratio=0.2)
+        self.train_loader, self.test_loader = split_client_data_loader(data_loader, train_ratio=0.8)
 
         self.epochs = epochs
         self.learning_rate = learning_rate
@@ -117,25 +147,3 @@ class FederatedClient(BaseClient):
         except Exception as e:
             print(f"⚠️  客户端 {self.client_id} 本地数据评估失败: {str(e)}")
             return {}
-
-    def split_client_data_loader(self, data_loader, test_ratio=0.2):
-        """
-        将客户端数据划分为训练集和测试集
-        Args:
-            data_loader: 所有数据加载器
-            test_ratio: 测试集比例
-        Returns:
-            train_loader, test_loader
-        """
-        dataset = data_loader.dataset
-        total_size = len(dataset)
-        test_size = int(total_size * test_ratio)
-        train_size = total_size - test_size
-
-        train_dataset, test_dataset = random_split(dataset, [train_size, test_size])
-
-        batch_size = data_loader.batch_size \
-            if data_loader.batch_size is not None else data_loader.batch_sampler.batch_size
-        train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-        test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
-        return train_loader, test_loader

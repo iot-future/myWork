@@ -167,6 +167,10 @@ class UnifiedDataset(Dataset):
         image = (image - mean) / std
 
         return image
+    
+    def create_new_dataset(self):
+        """根据当前索引创建新的数据集"""
+        self.original_dataset = [self.original_dataset[i] for i in self.indices]
 
 
 # 主要对外接口

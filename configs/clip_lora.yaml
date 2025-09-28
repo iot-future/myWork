@@ -18,18 +18,18 @@ learning_rates:
   optimizer: 5e-5                          # CLIP LoRA优化器学习率
 
 wandb:
-  enabled: false
-  experiment_name: "clip-lora-federated-learning"
+  enabled: true
+  experiment_name: "cifar100_clip_lora"
   offline: false
 
 client:
   num_clients: 4
-  local_epochs: 2
+  local_epochs: 1
   # learning_rate: 使用 learning_rates.client 配置
   
   client_datasets:
-    client_0: [mnist]
-    client_1: [mnist]
+    client_0: [cifar100,mnist]
+    client_1: [cifar100]
     client_2: [cifar10]
     client_3: [mnist, cifar10]
 
@@ -64,12 +64,14 @@ optimizer:
 data:
   data_dir: "/home/zzm/dataset/"
   batch_size: 32
-  num_workers: 2
+  num_workers: 16
   
   datasets:
     mnist:
       train: true
     cifar10:
+      train: true
+    cifar100:
       train: true
 
 evaluation:

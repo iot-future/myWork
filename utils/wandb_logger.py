@@ -44,8 +44,8 @@ def log_client_metrics(client_id: str, round_num: int, loss: float, accuracy: Op
     }
     if accuracy is not None:
         metrics[f"client/{client_id}/accuracy"] = accuracy
-    
-    wandb.log(metrics)
+
+    wandb.log(metrics, step=round_num)
 
 
 def log_global_metrics(round_num: int, metrics: Dict[str, float]):
@@ -54,7 +54,7 @@ def log_global_metrics(round_num: int, metrics: Dict[str, float]):
     for key, value in metrics.items():
         log_data[f"global/{key}"] = value
     
-    wandb.log(log_data)
+    wandb.log(log_data, step=round_num)
 
 
 def finish_wandb():

@@ -5,7 +5,7 @@
 # 实验基本设置
 # ==============================
 experiment:
-  name: "cifar100_federated_learning"      # 实验名称
+  name: "cifar100"      # 实验名称
   rounds: 30                               # CIFAR-100需要更多轮数收敛（100个类别）
   seed: 42                                 # 随机种子
 
@@ -18,38 +18,38 @@ device: "auto"  # auto: 自动检测GPU, cuda: 强制GPU, cpu: 强制CPU
 # 学习率配置 - 统一管理所有学习率设置
 # ==============================
 learning_rates:
-  client: 0.001                            # 客户端学习率
+  client: 0.00005                         # 客户端学习率
   server: 1.0                              # 服务器聚合学习率
-  model: 0.001                             # 模型训练学习率
-  optimizer: 0.001                         # 优化器学习率
+  model: 0.00005                            # 模型训练学习率
+  optimizer: 0.00005                        # 优化器学习率
 
 # ==============================
 # 分布式训练和日志配置
 # ==============================
 wandb:
   enabled: true                            # 启用WandB记录CIFAR-100实验
-  project: "cifar100-federated-learning"   # 专门的CIFAR-100项目
-  offline: true                            # 离线模式
+  experiment_name: "cifar100"   # 专门的CIFAR-100项目
+  offline: false                            # 离线模式
 
 # ==============================
 # 客户端配置
 # ==============================
 client:
-  num_clients: 5                           # 客户端数量（适合100个类别的分布）
-  local_epochs: 3                          # 本地训练轮数
+  num_clients: 1                           # 客户端数量（适合100个类别的分布）
+  local_epochs: 1                          # 本地训练轮数
   
   # 客户端数据集分配 - 所有客户端使用CIFAR-100
   client_datasets:
     client_0:
       - cifar100                           # 客户端0：CIFAR-100
-    client_1:
-      - cifar100                           # 客户端1：CIFAR-100
-    client_2:
-      - cifar100                           # 客户端2：CIFAR-100
-    client_3:
-      - cifar100                           # 客户端3：CIFAR-100
-    client_4:
-      - cifar100                           # 客户端4：CIFAR-100
+    # client_1:
+    #   - cifar100                           # 客户端1：CIFAR-100
+    # client_2:
+    #   - cifar100                           # 客户端2：CIFAR-100
+    # client_3:
+    #   - cifar100                           # 客户端3：CIFAR-100
+    # client_4:
+    #   - cifar100                           # 客户端4：CIFAR-100
   
 # ==============================
 # 服务器配置
@@ -61,7 +61,20 @@ server:
 # 模型配置
 # ==============================
 model:
-  type: "cnn"                              # CNN模型，适合CIFAR-100
+  type: "clip"                
+  model_name: "openai/clip-vit-base-patch32"
+  cache_dir: "/home/zzm/checkpoint"
+  use_pretrained: true
+  # CLIP特有参数
+  temperature: 0.07                        # 对比学习温度参数
+  freeze_classification_head: true                   # 冻结分类器
+  # LoRA配置
+  lora:
+    enabled: true
+    r: 8
+    lora_alpha: 16
+    lora_dropout: 0.05
+    target_modules: ["q_proj", "v_proj", "k_proj", "out_proj"]              
 
 # ==============================
 # 优化器配置
@@ -70,7 +83,7 @@ optimizer:
   type: "adamw"                            # 优化器类型
   weight_decay: 0.01                       # 权重衰减
   betas: [0.9, 0.999]                     # Adam beta参数
-  eps: 1e-8                               # 数值稳定性参数
+  # eps: 1e-8                               # 数值稳定性参数
 
 # ==============================
 # 数据集配置
@@ -78,7 +91,7 @@ optimizer:
 data:
   data_dir: "/home/zzm/dataset/"           # 数据集根目录
   batch_size: 32                           # 训练批次大小
-  num_workers: 2                           # 数据加载器工作进程数
+  num_workers: 16                           # 数据加载器工作进程数
   
   # 具体数据集配置
   datasets:
@@ -101,11 +114,3 @@ evaluation:
 # ==============================
 communication:
   method: "local"                          # 通信方法
-
-# ==============================
-# 实验和输出配置
-# ==============================
-output:
-  log_level: "INFO"                        # 日志级别
-  save_results: true                       # 保存结果
-  results_dir: "./results/"                # 结果保存目录

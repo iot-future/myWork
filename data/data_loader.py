@@ -290,50 +290,6 @@ def get_dataset_info(dataset_name: str, dataset_config: Dict[str, Any]) -> Dict[
     }
 
 
-class GroupBatchSampler(Sampler):
-    """
-    保证每个 batch 只来自同一个子数据集的采样器
-    """
-
-    def __init__(self, datasets, batch_size, shuffle=True):
-        super().__init__()
-        self.datasets = datasets
-        self.batch_size = batch_size
-        self.shuffle = shuffle
-        # 计算每个子数据集的索引范围
-        self.dataset_ranges = []
-        start = 0
-        for ds in datasets:
-            end = start + len(ds)
-            self.dataset_ranges.append((start, end))
-            start = end
-
-    def __iter__(self):
-        indices = []
-        for (start, end) in self.dataset_ranges:
-            idxs = list(range(start, end))
-            if self.shuffle:
-                import random
-                random.shuffle(idxs)
-            # 按 batch_size 分组
-            for i in range(0, len(idxs), self.batch_size):
-                batch = idxs[i:i + self.batch_size]
-                if len(batch) == self.batch_size:
-                    indices.append(batch)
-        # 打乱 batch 顺序（可选）
-        if self.shuffle:
-            import random
-            random.shuffle(indices)
-        for batch in indices:
-            yield batch
-
-    def __len__(self):
-        total = 0
-        for ds in self.datasets:
-            total += len(ds) // self.batch_size
-        return total
-
-
 def create_test_loaders(base_dataset_configs: Dict[str, Dict], batch_size: int) -> Dict[str, DataLoader]:
     """
     创建多数据集测试数据加载器
@@ -370,7 +326,7 @@ def create_test_loaders(base_dataset_configs: Dict[str, Dict], batch_size: int) 
     return test_loaders
 
 
-def create_combined_dataloader(dataloaders_dict, shuffle=True, num_workers=12):
+def create_combined_dataloader(dataloaders_dict, num_workers=12):
     """
     创建联合数据加载器，每个 batch 只包含同一数据集的数据
     """
@@ -379,9 +335,65 @@ def create_combined_dataloader(dataloaders_dict, shuffle=True, num_workers=12):
     first_loader = list(dataloaders_dict.values())[0]
     batch_size = first_loader.batch_size
 
-    sampler = GroupBatchSampler(datasets, batch_size, shuffle=shuffle)
     return DataLoader(
         combined_dataset,
-        batch_sampler=sampler,
-        num_workers=num_workers
+        num_workers=num_workers,
+        batch_size=batch_size,
     )
+
+
+class GroupBatchSampler(Sampler):
+    """
+    保证每个 batch 只来自同一个子数据集的采样器、
+
+    Args:
+        concat_dataset: ConcatDataset 对象，包含多个子数据集
+        batch_size: 每个 batch 的大小
+        train: 是否为训练模式（决定返回训练集或测试集的批次）
+        train_ratio: 训练集比例（用于划分训练集和测试集）
+        shuffle: 是否在划分前打乱每个子数据集的索引
+        drop_last: 是否丢弃最后一个不完整的 batch
+    """
+
+    def __init__(self, concat_dataset, batch_size, train=True, train_ratio=0.8, shuffle=True, drop_last=False):
+        super().__init__()
+        self.concat_dataset = concat_dataset
+        self.batch_size = batch_size
+        self.train = train
+        self.train_ratio = train_ratio
+        self.shuffle = shuffle
+        self.drop_last = drop_last
+
+        self.cum_sizes = concat_dataset.cumulative_sizes
+        self.sizes = [len(d) for d in concat_dataset.datasets]
+
+    def _make_batches(self):
+        import random
+        train_batches, test_batches = [], []
+        for i, _ in enumerate(self.sizes):
+            start = 0 if i == 0 else self.cum_sizes[i - 1]
+            end = self.cum_sizes[i]
+            idxs = list(range(start, end))
+            if self.shuffle:
+                random.shuffle(idxs)
+            sub_batches = [idxs[j:j + self.batch_size] for j in range(0, len(idxs), self.batch_size)]
+            if self.drop_last and sub_batches and len(sub_batches[-1]) < self.batch_size:
+                sub_batches = sub_batches[:-1]
+            k = int(len(sub_batches) * self.train_ratio)
+            train_batches.extend(sub_batches[:k])
+            test_batches.extend(sub_batches[k:])
+        return train_batches, test_batches
+
+    def __iter__(self):
+        train_batches, test_batches = self._make_batches()
+        batches = train_batches if self.train else test_batches
+        for b in batches:
+            yield b
+
+    def __len__(self):
+        total = 0
+        for _, size in enumerate(self.sizes):
+            n = (size // self.batch_size) if self.drop_last else ((size + self.batch_size - 1) // self.batch_size)
+            total += n
+        k_train = int(total * self.train_ratio)
+        return k_train if self.train else total - k_train
