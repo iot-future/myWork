@@ -14,6 +14,7 @@ import torch
 from torch.utils.data import DataLoader, Dataset, Subset, ConcatDataset, Sampler
 from data.datasets import mnist, cifar10, cifar100
 from data.middleware import create_unified_dataloader
+from utils.config_manager import Config
 
 # 支持的数据集名称到其对应类的映射
 SUPPORTED_DATASETS = {
@@ -201,7 +202,7 @@ def get_client_dataloaders(
         dataset_client_counts: Dict[str, int],
         batch_size: int,
         dataset_configs: Dict[str, Dict[str, Any]],
-        num_workers: int = 0,
+        num_workers: int = 16,
         seed: int = 42
 ) -> Dict[str, DataLoader]:
     """
@@ -316,7 +317,7 @@ def create_test_loaders(base_dataset_configs: Dict[str, Dict], batch_size: int) 
             test_dataset,
             batch_size=batch_size,
             shuffle=False,
-            num_workers=0
+            num_workers=Config.config['data']['num_workers']
         )
 
         # 使用中间件创建统一格式的测试数据加载器

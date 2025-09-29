@@ -10,19 +10,18 @@ import torch
 import time
 import sys
 from typing import Dict, Any, List
-from torch.utils.data import DataLoader, ConcatDataset
+from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from core.server import FederatedServer
 from core.client import FederatedClient
 from aggregation.federated_avg import FederatedAveraging
+from utils.config_manager import Config
 from utils.model_factory import ModelFactory
-from utils.results_handler import ResultsHandler
 from utils.wandb_logger import init_wandb, log_client_metrics, log_global_metrics, finish_wandb
 from utils.dataset_stats import count_clients_per_dataset
 from utils.evaluation_manager import EvaluationManager
 from data.data_loader import get_client_dataloaders, create_test_loaders, create_combined_dataloader
-from data.middleware import create_unified_dataloader
 from utils.device_manager import device_manager
 
 
@@ -51,14 +50,15 @@ class ExperimentRunner:
         >>> results = runner.run_experiment()
     """
 
-    def __init__(self, config: Dict[str, Any]):
-        self.config = config
+    # def __init__(self, config: Dict[str, Any]):
+    def __init__(self):
+        self.config = Config.config
         self.server = None
         self.clients = []
         self.test_loaders = {}
-        self.use_wandb = config.get('wandb', {}).get('enabled', False)
+        self.use_wandb = Config.config.get('wandb', {}).get('enabled', False)
         self.device = None
-        self.dataset_client_counts, self.dataset_client_mappings = count_clients_per_dataset(config)
+        self.dataset_client_counts, self.dataset_client_mappings = count_clients_per_dataset(Config.config)
 
         # 创建评估管理器
         self.evaluation_manager = EvaluationManager()
@@ -132,7 +132,8 @@ class ExperimentRunner:
                 dataset_client_counts=self.dataset_client_counts,
                 batch_size=batch_size,
                 dataset_configs=client_dataset_configs,
-                seed=self.config['experiment']['seed']
+                seed=self.config['experiment']['seed'],
+                num_workers=data_config["num_workers"]
             )
 
             client_data_loaders.append(client_dataloaders_dict)
@@ -150,7 +151,6 @@ class ExperimentRunner:
             print("\n⚠️  无可用测试数据集")
 
         return client_data_loaders
-
 
     def _prepare_test_config(self, dataset_config: Dict[str, Any]) -> Dict[str, Any]:
         """准备测试数据集配置"""
@@ -229,7 +229,7 @@ class ExperimentRunner:
 
             # 处理数据加载器：单数据集或多数据集
             data_loader = (list(dataloaders_dict.values())[0] if len(dataloaders_dict) == 1
-               else create_combined_dataloader(dataloaders_dict))
+                           else create_combined_dataloader(dataloaders_dict))
 
             client = FederatedClient(
                 client_id=client_id,
@@ -244,7 +244,6 @@ class ExperimentRunner:
         print(f"✓ 客户端设置完成: {len(self.clients)} 个客户端")
         if lora_clients_count > 0:
             print(f"🎯 LoRA启用客户端: {lora_clients_count}/{len(self.clients)}")
-
 
     def run_federated_round(self, round_num: int) -> Dict[str, float]:
         """执行一轮联邦学习"""
@@ -281,12 +280,13 @@ class ExperimentRunner:
                 client_metrics[client.client_id] = metrics
 
                 # 使用 pbar.write 输出信息，避免打断 tqdm 显示
-                pbar.write(f"客户端 {client.client_id} — 精度: {metrics.get('accuracy', 0) * 100:.2f}%, 损失: {metrics.get('loss', 0):.4f}")
+                pbar.write(
+                    f"客户端 {client.client_id} — 精度: {metrics.get('accuracy', 0) * 100:.2f}%, 损失: {metrics.get('loss', 0):.4f}")
 
                 # 简化的进度信息显示在 postfix 中
                 loss = metrics.get('loss', 0)
                 acc = metrics.get('accuracy', 0)
-                pbar.set_postfix({'Loss': f'{loss:.3f}', 'Acc': f'{acc*100:.2f}%'})
+                pbar.set_postfix({'Loss': f'{loss:.3f}', 'Acc': f'{acc * 100:.2f}%'})
 
                 # 更新进度条计数
                 pbar.update(1)

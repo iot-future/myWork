@@ -3,8 +3,7 @@ from typing import Dict, Any
 import copy
 from .base import BaseClient
 from utils.device_manager import device_manager
-from tqdm import tqdm
-import sys
+from utils.config_manager import Config
 from torch.utils.data import random_split, DataLoader, TensorDataset, Subset
 from data.data_loader import GroupBatchSampler
 
@@ -24,17 +23,24 @@ def split_client_data_loader(data_loader, train_ratio=0.8):
         total_size = len(dataset)
         train_size = int(total_size * train_ratio)
         test_size = total_size - train_size
-        train_datasets, test_datasets = random_split(dataset=dataset,lengths=[train_size, test_size])
-        train_loader = DataLoader(train_datasets, batch_size=data_loader.batch_size, shuffle=True, num_workers=data_loader.num_workers)
-        test_loader = DataLoader(test_datasets, batch_size=data_loader.batch_size, shuffle=False, num_workers=data_loader.num_workers)
+        train_datasets, test_datasets = random_split(dataset=dataset, lengths=[train_size, test_size])
+        train_loader = DataLoader(train_datasets, batch_size=data_loader.batch_size, shuffle=True,
+                                  num_workers=Config.config['data']['num_workers'], pin_memory=True)
+        test_loader = DataLoader(test_datasets, batch_size=data_loader.batch_size, shuffle=False,
+                                 num_workers=Config.config['data']['num_workers'], pin_memory=True)
+
         return train_loader, test_loader
-    
+
     # 如果数据集是ConcatDataset，则使用GroupBatchSampler
-    train_sampler = GroupBatchSampler(dataset, data_loader.batch_size, train=True, train_ratio=train_ratio, shuffle=True)
-    test_sampler = GroupBatchSampler(dataset, data_loader.batch_size, train=False, train_ratio=train_ratio, shuffle=False)
-    train_loader = DataLoader(dataset, batch_sampler=train_sampler, num_workers=data_loader.num_workers)
-    test_loader = DataLoader(dataset, batch_sampler=test_sampler, num_workers=data_loader.num_workers)
-    
+    train_sampler = GroupBatchSampler(dataset, data_loader.batch_size, train=True, train_ratio=train_ratio,
+                                      shuffle=True)
+    test_sampler = GroupBatchSampler(dataset, data_loader.batch_size, train=False, train_ratio=train_ratio,
+                                     shuffle=False)
+    train_loader = DataLoader(dataset, batch_sampler=train_sampler, num_workers=data_loader.num_workers,
+                              pin_memory=True)
+    test_loader = DataLoader(dataset, batch_sampler=test_sampler, num_workers=data_loader.num_workers,
+                             pin_memory=True)
+
     return train_loader, test_loader
 
 
@@ -79,22 +85,6 @@ class FederatedClient(BaseClient):
         total_loss = 0.0
         total_samples = 0
 
-        # 计算总的batch数量
-        total_batches = len(self.train_loader) * self.epochs
-
-        # 创建batch级别的进度条
-        if show_progress:
-            batch_pbar = tqdm(
-                total=total_batches,
-                desc=f"  {self.client_id} 训练",
-                unit="batch",
-                leave=False,
-                ncols=None,  # 自适应终端宽度
-                position=2,
-                file=sys.stdout,
-                bar_format="{desc}: {percentage:3.0f}%|{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]"
-            )
-
         for epoch in range(self.epochs):
             for batch_data, batch_labels, dataset_names in self.train_loader:
                 # 将数据移到设备
@@ -105,23 +95,9 @@ class FederatedClient(BaseClient):
                 loss = self.model.train_step(batch_data, batch_labels, dataset_names)
                 total_loss += loss * batch_data.size(0)
                 total_samples += batch_data.size(0)
+            # 显示进度，以及这一轮的平均损失
+            print(f"Client {self.client_id} - Epoch {epoch + 1}/{self.epochs}, Loss: {total_loss / total_samples:.4f}")
 
-                # 更新batch进度条
-                if show_progress:
-                    avg_loss = total_loss / total_samples if total_samples > 0 else 0.0
-                    batch_pbar.set_postfix({
-                        'Epoch': f'{epoch + 1}/{self.epochs}',
-                        'Loss': f'{avg_loss:.4f}'
-                    })
-                    batch_pbar.update(1)
-                    batch_pbar.refresh()  # 刷新显示
-
-        # 关闭batch进度条
-        if show_progress:
-            batch_pbar.close()
-            # 确保进度条完全清除
-            import time
-            time.sleep(0.01)
 
         # 计算平均损失
         avg_loss = total_loss / total_samples if total_samples > 0 else 0.0
