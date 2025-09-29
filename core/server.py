@@ -2,6 +2,7 @@ from typing import List, Dict, Any
 from .base import BaseServer
 from copy import deepcopy
 
+
 class FederatedServer(BaseServer):
     """联邦学习服务器实现"""
 
@@ -39,11 +40,11 @@ class FederatedServer(BaseServer):
     def send_global_model(self) -> Dict[str, Any]:
         """发送全局模型参数给客户端"""
         return self.global_model.get_parameters()
-    
+
     def get_global_model_parameters(self) -> Dict[str, Any]:
         """获取全局模型参数"""
         return self.global_model.get_parameters()
-    
+
     def set_client_weights(self, client_weights: Dict[str, float]):
         """设置客户端权重"""
         self.client_weights = client_weights

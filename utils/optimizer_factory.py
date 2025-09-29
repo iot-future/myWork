@@ -9,7 +9,7 @@ from typing import Dict, Any
 
 class OptimizerFactory:
     """优化器工厂类 - 统一使用AdamW"""
-    
+
     @classmethod
     def create_optimizer(cls, model_parameters, config: Dict[str, Any]):
         """
@@ -30,7 +30,7 @@ class OptimizerFactory:
         if isinstance(betas, list):
             betas = [float(b) for b in betas]
         eps = float(config.get('eps', 0.00000001))
-        
+
         return optim.AdamW(
             model_parameters,
             lr=learning_rate,
@@ -38,7 +38,7 @@ class OptimizerFactory:
             eps=eps,
             weight_decay=weight_decay
         )
-    
+
     @classmethod
     def get_default_config(cls) -> Dict[str, Any]:
         """获取AdamW的默认配置"""

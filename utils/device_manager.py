@@ -6,6 +6,28 @@
 import torch
 import warnings
 from typing import Union, Optional, Dict, Any, Tuple
+class DeviceMixin:
+    """设备管理mixin，提供设备缓存和移动功能"""
+
+    def __init__(self):
+        self._device_cache = None
+        self._device_cache_dirty = True
+
+    def _get_device(self):
+        """获取模型设备 - 带缓存优化"""
+        if self._device_cache is None or self._device_cache_dirty:
+            try:
+                self._device_cache = next(self.parameters()).device
+                self._device_cache_dirty = False
+            except StopIteration:
+                self._device_cache = torch.device('cpu')
+        return self._device_cache
+
+    def to(self, device):
+        """移动模型到指定设备并标记缓存失效"""
+        result = super().to(device)
+        self._device_cache_dirty = True
+        return result
 
 
 class DeviceManager:
@@ -75,17 +97,14 @@ class DeviceManager:
     def move_tensors_to_device(self, *tensors: torch.Tensor, device: Optional[torch.device] = None) -> Union[torch.Tensor, Tuple[torch.Tensor, ...]]:
         """将张量移动到指定设备"""
         target_device = device or self._current_device or self.get_optimal_device()
-        
-        moved_tensors = []
-        for tensor in tensors:
+        def move(tensor):
             if isinstance(tensor, torch.Tensor):
                 try:
-                    moved_tensors.append(tensor.to(target_device))
+                    return tensor.to(target_device)
                 except Exception:
-                    moved_tensors.append(tensor.to('cpu'))
-            else:
-                moved_tensors.append(tensor)
-        
+                    return tensor.to('cpu')
+            return tensor
+        moved_tensors = [move(t) for t in tensors]
         return moved_tensors[0] if len(moved_tensors) == 1 else tuple(moved_tensors)
     
     def get_current_device(self) -> Optional[torch.device]:

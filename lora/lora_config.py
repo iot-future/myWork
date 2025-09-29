@@ -20,24 +20,24 @@ class LoRAConfig:
     r: int = 16  # LoRA rank，控制低秩分解的维度
     lora_alpha: int = 32  # LoRA scaling 参数
     lora_dropout: float = 0.1  # LoRA层的dropout概率
-    
+
     # 目标模块配置
     target_modules: Optional[Union[List[str], str]] = None  # 要应用LoRA的模块名称
     bias: str = "none"  # bias处理方式: "none", "all", "lora_only"
-    
+
     # 任务类型配置
     task_type: str = "FEATURE_EXTRACTION"  # 任务类型，PEFT库要求
-    
+
     # 推理配置
     inference_mode: bool = False  # 是否为推理模式
-    
+
     # 模型特定配置
     modules_to_save: Optional[List[str]] = None  # 需要保存的完整模块（非LoRA）
-    
+
     # 联邦学习特定配置
     enable_federated: bool = True  # 是否启用联邦学习特性
     save_only_trainable: bool = True  # 是否只保存可训练参数
-    
+
     def __post_init__(self):
         """初始化后处理"""
         if self.target_modules is None:
@@ -46,7 +46,7 @@ class LoRAConfig:
                 "q_proj", "v_proj", "k_proj", "out_proj",  # 注意力层
                 "fc1", "fc2",  # MLP层
             ]
-            
+
     def to_peft_config(self) -> Dict[str, Any]:
         """转换为PEFT库所需的配置格式
         
@@ -63,7 +63,7 @@ class LoRAConfig:
             "inference_mode": self.inference_mode,
             "modules_to_save": self.modules_to_save,
         }
-    
+
     @classmethod
     def for_clip_model(cls, r: int = 16, lora_alpha: int = 32) -> "LoRAConfig":
         """为CLIP模型创建专用配置
@@ -89,7 +89,7 @@ class LoRAConfig:
             bias="none",
             lora_dropout=0.1,
         )
-    
+
     @classmethod
     def for_classification_head(cls, r: int = 8, lora_alpha: int = 16) -> "LoRAConfig":
         """为分类头创建专用配置
@@ -121,11 +121,11 @@ class LoRAModelState:
     original_parameters_count: int = 0  # 原始模型参数数量
     lora_parameters_count: int = 0  # LoRA参数数量
     trainable_parameters_count: int = 0  # 可训练参数数量
-    
+
     # 模型状态
     is_frozen: bool = False  # 原始权重是否被冻结
     lora_modules: List[str] = field(default_factory=list)  # 应用了LoRA的模块列表
-    
+
     def get_parameter_efficiency(self) -> float:
         """计算参数效率（LoRA参数占原始参数的比例）
         
@@ -135,7 +135,7 @@ class LoRAModelState:
         if self.original_parameters_count == 0:
             return 0.0
         return self.lora_parameters_count / self.original_parameters_count
-    
+
     def get_trainable_ratio(self) -> float:
         """计算可训练参数比例
         
@@ -152,7 +152,7 @@ class LoRAUtils:
     
     提供LoRA相关的实用函数，如参数统计、设备管理等。
     """
-    
+
     @staticmethod
     def count_parameters(model: torch.nn.Module, trainable_only: bool = False) -> int:
         """统计模型参数数量
@@ -168,7 +168,7 @@ class LoRAUtils:
             return sum(p.numel() for p in model.parameters() if p.requires_grad)
         else:
             return sum(p.numel() for p in model.parameters())
-    
+
     @staticmethod
     def get_lora_module_names(model: torch.nn.Module) -> List[str]:
         """获取模型中的LoRA模块名称
@@ -185,7 +185,7 @@ class LoRAUtils:
             if hasattr(module, 'lora_A') or hasattr(module, 'lora_B'):
                 lora_modules.append(name)
         return lora_modules
-    
+
     @staticmethod
     def print_model_info(model: torch.nn.Module, title: str = "Model Info") -> None:
         """打印模型信息
@@ -197,11 +197,11 @@ class LoRAUtils:
         total_params = LoRAUtils.count_parameters(model, trainable_only=False)
         trainable_params = LoRAUtils.count_parameters(model, trainable_only=True)
         lora_modules = LoRAUtils.get_lora_module_names(model)
-        
+
         print(f"\n=== {title} ===")
         print(f"Total parameters: {total_params:,}")
         print(f"Trainable parameters: {trainable_params:,}")
-        print(f"Trainable ratio: {trainable_params/total_params*100:.2f}%")
+        print(f"Trainable ratio: {trainable_params / total_params * 100:.2f}%")
         if lora_modules:
             print(f"LoRA modules: {len(lora_modules)}")
             for module_name in lora_modules[:5]:  # 只显示前5个

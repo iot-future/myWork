@@ -3,20 +3,23 @@ from typing import Dict, Any, List
 import copy
 import torch
 from utils.device_manager import device_manager
+
 """
 ABC (Abstract Base Class) 是 Python 中用于创建抽象基类的工具
 它的主要作用包括：
     通过 @abstractmethod 装饰器标记的方法必须在子类中实现，否则无法实例化该子类
     提供一个统一的接口规范，确保所有子类都实现了特定的方法
 """
+
+
 class BaseClient(ABC):
     """客户端基类"""
-    
+
     def __init__(self, client_id: str):
         self.client_id = client_id
         self.model = None
         self.data = None
-    
+
     @abstractmethod
     def train(self, global_model_params: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -38,11 +41,11 @@ class BaseClient(ABC):
 
 class BaseServer(ABC):
     """服务器基类"""
-    
+
     def __init__(self):
         self.global_model = None
         self.clients = []
-    
+
     @abstractmethod
     def aggregate(self, client_updates: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
@@ -55,7 +58,7 @@ class BaseServer(ABC):
             聚合后的全局模型参数
         """
         pass
-    
+
     @abstractmethod
     def initialize_model(self):
         """初始化全局模型"""
@@ -64,7 +67,7 @@ class BaseServer(ABC):
 
 class BaseModel(ABC):
     """模型基类"""
-    
+
     def __init__(self, optimizer_config: Dict[str, Any] = None):
         """
         初始化模型基类
@@ -74,7 +77,7 @@ class BaseModel(ABC):
         """
         self.optimizer_config = optimizer_config
         self.optimizer = None
-        
+
     def create_optimizer(self, model_parameters):
         """
         创建AdamW优化器
@@ -94,12 +97,12 @@ class BaseModel(ABC):
             self.optimizer = OptimizerFactory.create_optimizer(
                 model_parameters, default_config
             )
-    
+
     def _ensure_device_compatibility(self, *tensors):
         """确保张量在正确的设备上"""
         device = self._get_model_device()
         return device_manager.move_tensors_to_device(*tensors, device=device)
-    
+
     def _get_model_device(self):
         """
         获取模型所在设备
@@ -122,13 +125,12 @@ class BaseModel(ABC):
         else:
             # 默认返回 CPU
             return torch.device('cpu')
-    
-    
+
     @abstractmethod
     def train_step(self, data, labels):
         """单步训练"""
         pass
-    
+
     @abstractmethod
     def evaluate(self, dataloader):
         """模型评估"""
@@ -137,17 +139,17 @@ class BaseModel(ABC):
 
 class BaseCommunication(ABC):
     """通信基类"""
-    
+
     @abstractmethod
     def send_to_server(self, client_id: str, data: Any):
         """发送数据到服务器"""
         pass
-    
+
     @abstractmethod
     def send_to_client(self, client_id: str, data: Any):
         """发送数据到客户端"""
         pass
-    
+
     @abstractmethod
     def broadcast_to_clients(self, data: Any):
         """广播数据到所有客户端"""

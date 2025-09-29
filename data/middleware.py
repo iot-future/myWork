@@ -53,10 +53,10 @@ class UnifiedDataset(Dataset):
         # 如何image不是是元组
         if not isinstance(image, tuple):
             raise ValueError("数据包装有误，期望 (image, label) 元组")
-        
+
         dataset_name = label
-        image,label = image[0],image[1]
-        
+        image, label = image[0], image[1]
+
         # 转换为张量（如果还不是的话）
         if not isinstance(image, torch.Tensor):
             import torchvision.transforms as transforms
@@ -167,7 +167,7 @@ class UnifiedDataset(Dataset):
         image = (image - mean) / std
 
         return image
-    
+
     def create_new_dataset(self):
         """根据当前索引创建新的数据集"""
         self.original_dataset = [self.original_dataset[i] for i in self.indices]

@@ -31,14 +31,14 @@ class MNIST(Dataset):
                 transforms.ToTensor(),
                 transforms.Normalize((0.1307,), (0.3081,))
             ])
-            
+
         self.dataset = datasets.MNIST(
             root=data_root,
             train=train,
             download=True,
             transform=transform
         )
-        
+
         self.classnames = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']
 
     def __len__(self):

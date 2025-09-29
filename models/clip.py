@@ -3,6 +3,7 @@ CLIP模型实现，支持联邦学习框架
 基于Hugging Face transformers库，解耦架构设计
 参考论文：Learning Transferable Visual Representations with Natural Language Supervision
 """
+import os
 from copy import deepcopy
 import torch
 import torch.nn as nn
@@ -11,7 +12,7 @@ from typing import Dict, Any, Optional, Union, List
 from transformers import CLIPModel, CLIPProcessor, CLIPTokenizer, CLIPVisionModel, CLIPTextModel
 from PIL import Image
 from core.base import BaseModel
-from utils.device_manager import device_manager
+from utils.device_manager import device_manager, DeviceMixin
 # zero-shot 分类头
 
 from models.classificationHead import (
@@ -28,30 +29,6 @@ try:
 except ImportError as e:
     LORA_AVAILABLE = False
     print(f"Warning: LoRA functionality not available. Please install required dependencies: {e}")
-
-
-class DeviceMixin:
-    """设备管理mixin，提供设备缓存和移动功能"""
-
-    def __init__(self):
-        self._device_cache = None
-        self._device_cache_dirty = True
-
-    def _get_device(self):
-        """获取模型设备 - 带缓存优化"""
-        if self._device_cache is None or self._device_cache_dirty:
-            try:
-                self._device_cache = next(self.parameters()).device
-                self._device_cache_dirty = False
-            except StopIteration:
-                self._device_cache = torch.device('cpu')
-        return self._device_cache
-
-    def to(self, device):
-        """移动模型到指定设备并标记缓存失效"""
-        result = super().to(device)
-        self._device_cache_dirty = True
-        return result
 
 
 class BaseEncoder(torch.nn.Module, DeviceMixin):
@@ -157,7 +134,7 @@ class TextEncoder(BaseEncoder):
 
 
 class ClassificationHead(torch.nn.Linear):
-    """分类头，支持特征归一化"""
+    """分类头，支持特征归一化（未使用）"""
 
     def __init__(self, input_size: int, output_size: int, normalize: bool = False, bias: bool = True):
         super().__init__(input_size, output_size, bias=bias)
@@ -196,7 +173,7 @@ class ClassificationHead(torch.nn.Linear):
 
 
 class ImageClassifier(torch.nn.Module):
-    """图像分类器，结合编码器和分类头"""
+    """图像分类器，结合编码器和分类头（未使用）"""
 
     def __init__(self, image_encoder: ImageEncoder, classification_head: ClassificationHead):
         super().__init__()
@@ -285,7 +262,8 @@ class FederatedCLIPModel(BaseModel, DeviceMixin):
             tokenizer=self.tokenizer,
             text_encoder=self.text_encoder,
             dataset_names=self.dataset_names,
-            device=device
+            device=device,
+            head_dir=os.path.join(self.cache_dir, "zero_shot_heads")
         )
 
         # 创建多头图像分类器
@@ -382,7 +360,7 @@ class FederatedCLIPModel(BaseModel, DeviceMixin):
                 for name, param in self.image_encoder.named_parameters()
                 if param.requires_grad
             }
-        
+
     def set_parameters(self, params: Dict[str, torch.Tensor]):
         """设置模型参数 - 联邦学习核心功能"""
         # TODO: 这里需要修改，查看参数形状
@@ -412,15 +390,15 @@ class FederatedCLIPModel(BaseModel, DeviceMixin):
         self.classifier.train()
         self.optimizer.zero_grad()
 
-        device = self._get_model_device()
-        data, labels = device_manager.move_tensors_to_device(data, labels, device=device)
+        # device = self._get_model_device()
+        # data, labels = device_manager.move_tensors_to_device(data, labels, device=device)
 
         outputs = self.classifier(data, dataset_names[0])
         loss = self.criterion(outputs, labels)
         loss.backward()
 
         # 对图像编码器的梯度进行裁剪，防止梯度爆炸（max_norm=1.0）
-        torch.nn.utils.clip_grad_norm_(self.image_encoder.parameters(), max_norm=1.0)
+        # torch.nn.utils.clip_grad_norm_(self.image_encoder.parameters(), max_norm=1.0)
         self.optimizer.step()
 
         return loss.item()

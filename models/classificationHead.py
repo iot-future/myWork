@@ -1,3 +1,4 @@
+import os
 from typing import List
 
 import torch
@@ -68,7 +69,8 @@ def build_classification_head(
         text_encoder: CLIPTextModel,
         dataset_name: str,
         device: torch.device,
-        logit_scale: float = 4.6052
+        logit_scale: float = 4.6052,
+        head_dir: str = None
 ) -> ClassificationHead:
     """
     构建零样本分类头
@@ -79,10 +81,22 @@ def build_classification_head(
         dataset_name (str): 数据集名称
         device (torch.device): 设备
         logit_scale (float): logit缩放因子（默认4.6052，对应exp(4.6052)≈100）
-
+        head_dir (str): 分类头保存目录
     Returns:
         ClassificationHead: 分类头对象
     """
+    os.makedirs(head_dir, exist_ok=True)
+    head_path = os.path.join(head_dir, f"{dataset_name}_head.pth")
+    # 如果缓存存在，直接加载
+    if os.path.exists(head_path):
+        print(f"Loading classification head from cache: {head_path}")
+        weights = torch.load(head_path, map_location=device)
+        classification_head = ClassificationHead(
+            normalize=True,
+            weights=weights
+        )
+        return classification_head
+    
     text_encoder.eval()
     text_encoder.to(device)
 
@@ -108,6 +122,10 @@ def build_classification_head(
         zeroshot_weights = zeroshot_weights * logit_scale_tensor.exp()
         zeroshot_weights = zeroshot_weights.float()
 
+    # 保存权重到缓存
+    torch.save(zeroshot_weights.cpu(), head_path)
+    print(f"Classification head saved to cache: {head_path}")
+
     classification_head = ClassificationHead(
         normalize=True,
         weights=zeroshot_weights
@@ -121,11 +139,12 @@ def create_multi_dataset_zero_shot_classifier(
         text_encoder,
         dataset_names: List[str],
         device: torch.device,
+        head_dir: str = None
 ):
     multi_dataset_zero_shot_classifier = nn.ModuleDict()
     for dataset_name in dataset_names:
         multi_dataset_zero_shot_classifier[dataset_name] \
-            = build_classification_head(tokenizer, text_encoder, dataset_name, device)
+            = build_classification_head(tokenizer, text_encoder, dataset_name, device, head_dir=head_dir)
     return multi_dataset_zero_shot_classifier
 
 

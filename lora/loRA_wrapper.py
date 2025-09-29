@@ -6,6 +6,7 @@ from typing import Dict, Any, Optional
 import torch
 from peft import LoraConfig, get_peft_model
 from copy import deepcopy
+
 TORCH_AVAILABLE = True
 
 
@@ -102,7 +103,7 @@ class LoRAWrapper:
         if not self._is_lora_applied or self.model is None:
             print("LoRA is not applied. Cannot set LoRA parameters.")
             return
-        
+
         # 深拷贝LoRA参数，以避免修改原始参数，但是copy_本身是in-place操作，用于以防万一
         lora_params = deepcopy(lora_params)
         with torch.no_grad():

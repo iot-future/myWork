@@ -5,6 +5,19 @@ from typing import Dict, Any
 
 
 class ConfigManager:
+    _instance = None
+
+    def __new__(cls, *args, **kwargs):
+        if not cls._instance:
+            cls._instance = super(ConfigManager, cls).__new__(cls)
+        return cls._instance
+
+    def __init__(self):
+        # 确保初始化只执行一次
+        if not hasattr(self, 'initialized'):
+            self.initialized = True
+            self.config = None  # 存储配置的字典（全局唯一）
+
     ARG_CONFIG_MAP = {
         'rounds': ['experiment', 'rounds'],
         'seed': ['experiment', 'seed'],
@@ -15,17 +28,16 @@ class ConfigManager:
         'data_dir': ['data', 'data_dir']
     }
 
-    @staticmethod
-    def load_config(config_file: str = 'configs/default.yaml') -> Dict[str, Any]:
+    def load_config(self, config_file: str = 'configs/default.yaml') -> Dict[str, Any]:
         '''加载YAML配置文件'''
         if not os.path.exists(config_file):
             raise FileNotFoundError(f"配置文件不存在: {config_file}")
         with open(config_file, 'r', encoding='utf-8') as f:
-            config = yaml.safe_load(f)
+            self.config = yaml.safe_load(f)
 
         # 验证配置文件的完整性
-        ConfigManager._validate_config(config)
-        return config
+        self._validate_config(self.config)
+        return self.config
 
     @staticmethod
     def _validate_config(config: Dict[str, Any]):
@@ -117,3 +129,6 @@ class ConfigManager:
         parser.add_argument('--data-dir', type=str, help='数据存储目录')
 
         return parser
+
+
+Config = ConfigManager()

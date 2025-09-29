@@ -53,7 +53,7 @@ def log_global_metrics(round_num: int, metrics: Dict[str, float]):
     log_data = {"round": round_num}
     for key, value in metrics.items():
         log_data[f"global/{key}"] = value
-    
+
     wandb.log(log_data, step=round_num)
 
 

@@ -21,18 +21,18 @@ def count_clients_per_dataset(config: Dict[str, Any]) -> Tuple[Dict[str, int], D
     # 初始化结果字典
     dataset_client_counts = {}
     dataset_client_mappings = {}
-    
+
     # 获取客户端数据集配置
     client_datasets = config.get('client', {}).get('client_datasets', {})
-    
+
     # 获取所有可用数据集
     available_datasets = config.get('data', {}).get('datasets', {}).keys()
-    
+
     # 初始化每个数据集的统计信息
     for dataset_name in available_datasets:
         dataset_client_counts[dataset_name] = 0
         dataset_client_mappings[dataset_name] = {}
-    
+
     # 遍历每个客户端的数据集配置
     for client_id, datasets in client_datasets.items():
         if isinstance(datasets, list):
@@ -43,27 +43,28 @@ def count_clients_per_dataset(config: Dict[str, Any]) -> Tuple[Dict[str, int], D
                     dataset_internal_id = dataset_client_counts[dataset_name]
                     dataset_client_mappings[dataset_name][client_id] = dataset_internal_id
                     dataset_client_counts[dataset_name] += 1
-    
+
     return dataset_client_counts, dataset_client_mappings
+
 
 if __name__ == "__main__":
     """主函数 - 简洁的实验流程"""
     # 创建配置管理器
     from config_manager import ConfigManager
- 
+
     config_manager = ConfigManager()
-    
+
     # 解析命令行参数
     parser = config_manager.create_parser()
     args = parser.parse_args()
-    
+
     # 加载配置并应用命令行覆盖
     config = config_manager.load_config(args.config)
     config = config_manager.override_config(config, args)
-    
+
     # 获取数据集统计信息
     dataset_client_counts, dataset_client_mappings = count_clients_per_dataset(config=config)
-    
+
     # 输出所有数据集的统计信息
     print("数据集统计信息:")
     for dataset_name in dataset_client_counts:

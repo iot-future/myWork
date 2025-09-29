@@ -36,14 +36,14 @@ class CIFAR100(Dataset):
                 transforms.ToTensor(),
                 transforms.Normalize((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761))
             ])
-            
+
         self.dataset = datasets.CIFAR100(
             root=data_root,
             train=train,
             download=True,
             transform=transform
         )
-        
+
         # CIFAR-100 的100个类别名称
         self.classnames = [
             'apple', 'aquarium_fish', 'baby', 'bear', 'beaver',

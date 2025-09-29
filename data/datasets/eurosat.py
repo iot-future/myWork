@@ -8,7 +8,7 @@ class EuroSAT(Dataset):
     处理数据的下载、转换和访问。
     EuroSAT 包含10个类别的卫星图像。
     """
-    
+
     def __init__(self, data_root: str, train: bool = True, preprocess=None):
         """
         初始化 EuroSAT 数据集。
@@ -34,9 +34,9 @@ class EuroSAT(Dataset):
         # EuroSAT 的10个类别
         self.classnames = ['AnnualCrop', 'Forest', 'HerbaceousVegetation', 'Highway', 'Industrial',
                            'Pasture', 'PermanentCrop', 'Residential', 'River', 'SeaLake']
-        
+
     def __len__(self):
         return len(self.dataset)
-    
+
     def __getitem__(self, idx):
         return self.dataset[idx]

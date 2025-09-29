@@ -10,6 +10,7 @@ class SUN397(Dataset):
     处理数据的下载、转换和访问。
     SUN397 包含397个类别的场景图像。
     """
+
     def __init__(self, data_root: str, train: bool = True, preprocess=None):
         """
         初始化 SUN397 数据集。
@@ -37,16 +38,14 @@ class SUN397(Dataset):
         else:
             self.dataset = datasets.ImageFolder(val_dir, transform=transform)
 
-        
-
         # SUN397 的397个类别（这里只列出部分作为示例）
         self.classnames = ['abbey', 'airport_terminal', 'alley', 'amphitheater', 'apartment_building/outdoor',
-                           'aquarium', 'arch', 'art_gallery', 'art_school', 'auditorium', 
+                           'aquarium', 'arch', 'art_gallery', 'art_school', 'auditorium',
                            # ... (省略其他类别)
                            'youth_hostel', 'zen_garden']
-        
+
     def __len__(self):
         return len(self.dataset)
-    
+
     def __getitem__(self, idx):
         return self.dataset[idx]

@@ -4,11 +4,12 @@ import copy
 
 class FederatedAveraging:
     """联邦平均算法实现"""
-    
+
     def __init__(self):
         pass
-    
-    def aggregate(self, client_updates: List[Dict[str, Any]], client_weights: Dict[str, float] = None) -> Dict[str, Any]:
+
+    def aggregate(self, client_updates: List[Dict[str, Any]], client_weights: Dict[str, float] = None) -> Dict[
+        str, Any]:
         """
         执行联邦平均聚合
         
@@ -21,7 +22,7 @@ class FederatedAveraging:
         """
         if not client_updates:
             raise ValueError("No client updates provided")
-        
+
         # 提取客户端参数
         client_params_list = []
         for update in client_updates:
@@ -30,7 +31,7 @@ class FederatedAveraging:
             else:
                 # 向后兼容：如果直接是参数字典
                 client_params_list.append(update)
-        
+
         # 如果没有提供权重或权重为空，使用均等权重
         if client_weights is None or len(client_weights) == 0:
             num_clients = len(client_params_list)
@@ -41,13 +42,13 @@ class FederatedAveraging:
             # 归一化权重
             total_weight = sum(weights)
             weights = [w / total_weight for w in weights]
-        
+
         # 初始化聚合参数
         aggregated_params = None
-        
+
         for i, client_params in enumerate(client_params_list):
             weight = weights[i]
-            
+
             if aggregated_params is None:
                 # 第一个客户端，直接复制参数
                 aggregated_params = {}
@@ -63,7 +64,7 @@ class FederatedAveraging:
                         aggregated_params[key] += value * weight
                     else:  # numpy array
                         aggregated_params[key] += value * weight
-        
+
         return aggregated_params
 
 
