@@ -66,7 +66,7 @@ model:
   
   # Hugging Face模型配置
   model_name: "openai/clip-vit-base-patch32"  # 预训练模型名称
-  cache_dir: "/home/zzm/checkpoint"        # 模型缓存目录
+  cache_dir: "/mnt/nfs/dataset/zzm_checkpoints"        # 模型缓存目录
   use_pretrained: true                     # 使用预训练权重
   
   # CLIP特有参数
@@ -103,7 +103,7 @@ optimizer:
 # 数据集配置
 # ==============================
 data:
-  data_dir: "/home/zzm/dataset/"           # 数据集根目录
+  data_dir: "/mnt/nfs/dataset/"           # 数据集根目录
   batch_size: 32                           # 较小批次，适合CLIP大模型
   num_workers: 2                           # 数据加载器工作进程数
   

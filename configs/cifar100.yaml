@@ -27,7 +27,7 @@ learning_rates:
 # 分布式训练和日志配置
 # ==============================
 wandb:
-  enabled: true                            # 启用WandB记录CIFAR-100实验
+  enabled: false                            # 启用WandB记录CIFAR-100实验
   experiment_name: "cifar100"   # 专门的CIFAR-100项目
   offline: false                            # 离线模式
 
@@ -36,7 +36,7 @@ wandb:
 # ==============================
 client:
   num_clients: 1                           # 客户端数量（适合100个类别的分布）
-  local_epochs: 1                          # 本地训练轮数
+  local_epochs: 10                          # 本地训练轮数
   
   # 客户端数据集分配 - 所有客户端使用CIFAR-100
   client_datasets:
@@ -63,7 +63,7 @@ server:
 model:
   type: "clip"                
   model_name: "openai/clip-vit-base-patch32"
-  cache_dir: "/home/zzm/checkpoint"
+  cache_dir: "/mnt/nfs/dataset/zzm_checkpoints"
   use_pretrained: true
   # CLIP特有参数
   temperature: 0.07                        # 对比学习温度参数
@@ -71,10 +71,11 @@ model:
   # LoRA配置
   lora:
     enabled: true
-    r: 8
-    lora_alpha: 16
+    r: 16
+    lora_alpha: 32
     lora_dropout: 0.05
-    target_modules: ["q_proj", "v_proj", "k_proj", "out_proj"]              
+    target_modules: ["q_proj", "v_proj", "k_proj", "out_proj",
+        "visual.q_proj", "visual.k_proj", "visual.v_proj", "visual.out_proj"]              
 
 # ==============================
 # 优化器配置
@@ -89,9 +90,9 @@ optimizer:
 # 数据集配置
 # ==============================
 data:
-  data_dir: "/home/zzm/dataset/"           # 数据集根目录
+  data_dir: "/mnt/nfs/dataset/"           # 数据集根目录
   batch_size: 32                           # 训练批次大小
-  num_workers: 16                           # 数据加载器工作进程数
+  num_workers: 32                           # 数据加载器工作进程数
   
   # 具体数据集配置
   datasets:

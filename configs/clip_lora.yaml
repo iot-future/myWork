@@ -41,7 +41,7 @@ model:
   type: "clip"
   # learning_rate: 使用 learning_rates.model 配置
   model_name: "openai/clip-vit-base-patch32"
-  cache_dir: "/home/zzm/checkpoint"
+  cache_dir: "/mnt/nfs/dataset/zzm_checkpoints"
   use_pretrained: true
 
   # CLIP特有参数
@@ -62,7 +62,7 @@ optimizer:
   betas: [0.9, 0.98]      
 
 data:
-  data_dir: "/home/zzm/dataset/"
+  data_dir: "/mnt/nfs/dataset/"
   batch_size: 32
   num_workers: 16
   
