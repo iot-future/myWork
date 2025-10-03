@@ -189,7 +189,7 @@ python main.py --config configs/clip.yaml \
 model:
   type: "clip"                             # 模型类型
   model_name: "openai/clip-vit-base-patch32"  # 预训练模型
-  cache_dir: "/home/zzm/checkpoint"        # 模型缓存目录
+  cache_dir: "/mnt/nfs/dataset/zzm_checkpoints"        # 模型缓存目录
   freeze_encoder: false                    # 是否冻结编码器
   normalize_features: true                 # 特征归一化
 

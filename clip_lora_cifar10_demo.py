@@ -27,7 +27,7 @@ sys.path.insert(0, project_root)
 
 # 导入项目模块
 from models.clip import ImageEncoder
-from lora.loRA_wrapper import LoRAWrapper
+from lora.loRA_utils import LoRAWrapper
 from lora.lora_config import LoRAConfig
 from data.datasets.cifar10 import CIFAR10
 
@@ -209,7 +209,7 @@ def main():
         'epochs': 5,
         'data_root': '/home/zzm/dataset',  # CIFAR-10数据集路径
         'model_name': "openai/clip-vit-base-patch32",
-        'cache_dir': '/home/zzm/checkpoint'  # CLIP模型缓存路径
+        'cache_dir': '/mnt/nfs/dataset/zzm_checkpoints'  # CLIP模型缓存路径
     }
     
     # 创建必要的目录
