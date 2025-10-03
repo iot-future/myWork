@@ -36,7 +36,7 @@ wandb:
 # ==============================
 client:
   num_clients: 1                           # 客户端数量（适合100个类别的分布）
-  local_epochs: 10                          # 本地训练轮数
+  local_epochs: 1                          # 本地训练轮数
   
   # 客户端数据集分配 - 所有客户端使用CIFAR-100
   client_datasets:

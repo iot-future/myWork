@@ -3,7 +3,7 @@ from typing import Dict, Any, List
 import copy
 import torch
 from utils.device_manager import device_manager
-
+from utils.optimizer_factory import OptimizerFactory
 """
 ABC (Abstract Base Class) 是 Python 中用于创建抽象基类的工具
 它的主要作用包括：
@@ -86,16 +86,13 @@ class BaseModel(ABC):
             model_parameters: 模型参数
         """
         if self.optimizer_config:
-            from utils.optimizer_factory import OptimizerFactory
             self.optimizer = OptimizerFactory.create_optimizer(
-                model_parameters, self.optimizer_config
+                model_parameters
             )
         else:
             # 使用默认AdamW配置
-            from utils.optimizer_factory import OptimizerFactory
-            default_config = OptimizerFactory.get_default_config()
             self.optimizer = OptimizerFactory.create_optimizer(
-                model_parameters, default_config
+                model_parameters
             )
 
     def _ensure_device_compatibility(self, *tensors):

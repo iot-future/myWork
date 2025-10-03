@@ -14,7 +14,7 @@ import torchvision.transforms as transforms
 from torch.utils.data import Dataset, DataLoader
 from typing import Any, Callable, Optional
 from utils.device_manager import device_manager
-
+import torchvision.transforms as transforms
 
 class UnifiedDataset(Dataset):
     """
@@ -59,7 +59,6 @@ class UnifiedDataset(Dataset):
 
         # 转换为张量（如果还不是的话）
         if not isinstance(image, torch.Tensor):
-            import torchvision.transforms as transforms
             image = transforms.ToTensor()(image)
 
         # 加工图像

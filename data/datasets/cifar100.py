@@ -7,7 +7,7 @@ CIFAR-100是CIFAR-10的扩展版本，包含100个不同的类别。
 """
 from torch.utils.data import Dataset
 from torchvision import datasets, transforms
-
+from data.transform import UnifiedTransform
 
 class CIFAR100(Dataset):
     """
@@ -30,13 +30,13 @@ class CIFAR100(Dataset):
         if preprocess is not None:
             transform = preprocess
         else:
-            # CIFAR-100 标准预处理：归一化到 [0,1] 然后使用 CIFAR-100 的均值和标准差
-            # CIFAR-100 的均值和标准差与 CIFAR-10 相似但略有不同
             transform = transforms.Compose([
+                transforms.Resize(224),
                 transforms.ToTensor(),
-                transforms.Normalize((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761))
+                # transforms.Normalize((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761))
+                transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
             ])
-
+        transform = UnifiedTransform(target_size=224)
         self.dataset = datasets.CIFAR100(
             root=data_root,
             train=train,

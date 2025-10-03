@@ -80,12 +80,10 @@ class FederatedClient(BaseClient):
 
         if self.train_loader is None:
             raise ValueError("Data loader not set")
-
-        # 执行本地训练并收集训练指标
-        total_loss = 0.0
-        total_samples = 0
-
         for epoch in range(self.epochs):
+            # 执行本地训练并收集训练指标
+            total_loss = 0.0
+            total_samples = 0
             for batch_data, batch_labels, dataset_names in self.train_loader:
                 # 将数据移到设备
                 batch_data, batch_labels = device_manager.move_tensors_to_device(
@@ -97,8 +95,6 @@ class FederatedClient(BaseClient):
                 total_samples += batch_data.size(0)
             # 显示进度，以及这一轮的平均损失
             print(f"Client {self.client_id} - Epoch {epoch + 1}/{self.epochs}, Loss: {total_loss / total_samples:.4f}")
-
-
         # 计算平均损失
         avg_loss = total_loss / total_samples if total_samples > 0 else 0.0
 

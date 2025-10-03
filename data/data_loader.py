@@ -36,8 +36,8 @@ class DatasetWithSource(Dataset):
 
     def __getitem__(self, idx):
         # 返回
-        data = self.base_dataset[idx]
-        return data, self.dataset_name
+        data, label = self.base_dataset[idx]
+        return data, label, self.dataset_name
 
 
 def _validate_dataset_name(dataset_name: str) -> str:
@@ -191,9 +191,9 @@ def _create_single_client_dataloader(
         shuffle=True,
         num_workers=num_workers,
     )
-
+    return dataloader
     # 7. 使用中间件统一处理
-    return create_unified_dataloader(dataloader, normalized_name)
+    # return create_unified_dataloader(dataloader, normalized_name)
 
 
 def get_client_dataloaders(

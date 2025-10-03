@@ -33,35 +33,12 @@ class ClassificationHead(torch.nn.Linear):
             self.weight = torch.nn.Parameter(weights.clone())
         if biases is not None:
             self.bias = torch.nn.Parameter(biases.clone())
-        else:
-            self.bias = torch.nn.Parameter(torch.zeros_like(self.bias))
 
     def forward(self, inputs):
-        """
-        前向传播
-        
-        Args:
-            inputs: 输入特征向量
-            
-        Returns:
-            分类logits
-        """
         # 如果需要归一化，对输入进行L2归一化
         if self.normalize:
             inputs = inputs / inputs.norm(dim=-1, keepdim=True)
         return super().forward(inputs)
-
-    def __call__(self, inputs):
-        """
-        使对象可调用，等价于forward方法
-        
-        Args:
-            inputs: 输入特征向量
-            
-        Returns:
-            分类logits
-        """
-        return self.forward(inputs)
 
 
 def build_classification_head(
@@ -166,6 +143,7 @@ class MultiHeadImageClassifier(torch.nn.Module):
         super().__init__()
         self.image_encoder = image_encoder
         self.classification_heads = classification_heads
+        self.is_lora_applied = False    # 用于标记LoRA是否应用
 
     def freeze_head(self):
         """
@@ -175,33 +153,17 @@ class MultiHeadImageClassifier(torch.nn.Module):
             head.weight.requires_grad_(False)
             head.bias.requires_grad_(False)
 
-    def forward(self, inputs, dataset_name):
+    def forward(self, inputs, dataset_name="cifar100"):
         """
         前向传播
         
         Args:
             inputs: 输入图像
             dataset_name: 数据集名称
-
             
         Returns:
             对应分类头的分类结果
         """
-        # 通过图像编码器提取特征
         features = self.image_encoder(inputs)
-        # 通过指定数据集名称的分类头得到分类结果
         outputs = self.classification_heads[dataset_name](features)
         return outputs
-
-    def __call__(self, inputs, dataset_name):
-        """
-        使对象可调用，等价于forward方法
-        
-        Args:
-            inputs: 输入图像
-            head_idx: 要使用的分类头索引
-            
-        Returns:
-            对应分类头的分类结果
-        """
-        return self.forward(inputs, dataset_name)

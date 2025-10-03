@@ -9,216 +9,23 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from typing import Dict, Any, Optional, Union, List
-from transformers import CLIPModel, CLIPProcessor, CLIPTokenizer, CLIPVisionModel, CLIPTextModel
+from transformers import CLIPTokenizer
 from PIL import Image
 from core.base import BaseModel
 from utils.device_manager import device_manager, DeviceMixin
-# zero-shot 分类头
-
+from models.encoder import ImageEncoder, TextEncoder
 from models.classificationHead import (
     create_multi_dataset_zero_shot_classifier,
     MultiHeadImageClassifier
 )
 
-# LoRA相关导入将在下面条件导入
-
 try:
-    from lora.loRA_wrapper import LoRAWrapper
+    import lora.loRA_utils as lora_utils
 
     LORA_AVAILABLE = True
 except ImportError as e:
     LORA_AVAILABLE = False
     print(f"Warning: LoRA functionality not available. Please install required dependencies: {e}")
-
-
-class BaseEncoder(torch.nn.Module, DeviceMixin):
-    """编码器基类，提供公共功能"""
-
-    def __init__(self, model_name: str, cache_dir: Optional[str] = None, device: Optional[str] = None):
-        super().__init__()
-        DeviceMixin.__init__(self)
-
-        self.model_name = model_name
-        self.cache_dir = cache_dir
-        self.processor = CLIPProcessor.from_pretrained(model_name, cache_dir=cache_dir)
-
-        if device:
-            device_manager.move_model_to_device(self, torch.device(device))
-
-    def save(self, filename: str, model_attr: str):
-        """保存编码器"""
-        print(f'Saving {self.__class__.__name__} to {filename}')
-        torch.save({
-            'model_state_dict': getattr(self, model_attr).state_dict(),
-            'model_name': self.model_name,
-            'cache_dir': self.cache_dir
-        }, filename)
-
-    @classmethod
-    def load(cls, filename: str):
-        """加载编码器"""
-        print(f'Loading {cls.__name__} from {filename}')
-        checkpoint = torch.load(filename, map_location='cpu')
-        return cls(
-            model_name=checkpoint['model_name'],
-            cache_dir=checkpoint['cache_dir']
-        )
-
-
-class ImageEncoder(BaseEncoder):
-    """图像编码器，基于CLIP视觉模型"""
-
-    def __init__(self, model_name: str = "openai/clip-vit-base-patch32",
-                 cache_dir: Optional[str] = None, device: Optional[str] = None):
-        super().__init__(model_name, cache_dir, device)
-
-        print(f'Loading {model_name} CLIP model.')
-        self.clip_model = CLIPModel.from_pretrained(model_name, cache_dir=cache_dir)
-        self.feature_dim = self.clip_model.config.projection_dim  # 一般为512
-        # 只保留视觉模型部分
-        del self.clip_model.text_model
-        del self.clip_model.text_embed_dim
-        del self.clip_model.text_projection
-
-    def forward(self, images):
-        device = self._get_device()
-        if isinstance(images, list) and isinstance(images[0], Image.Image):
-            inputs = self.processor(images=images, return_tensors="pt", padding=True)
-            pixel_values = device_manager.move_tensors_to_device(inputs['pixel_values'], device=device)
-        elif isinstance(images, torch.Tensor):
-            pixel_values = device_manager.move_tensors_to_device(images, device=device)
-        else:
-            raise ValueError("Images must be either a list of PIL Images or a torch.Tensor")
-
-        features = self.clip_model.get_image_features(pixel_values=pixel_values)
-        return features
-
-    def save(self, filename: str):
-        super().save(filename, 'vision_model')
-
-    @classmethod
-    def load(cls, filename: str):
-        encoder = super().load(filename)
-        checkpoint = torch.load(filename, map_location='cpu')
-        encoder.vision_model.load_state_dict(checkpoint['model_state_dict'])
-        return encoder
-
-
-class TextEncoder(BaseEncoder):
-    """文本编码器，基于CLIP文本模型"""
-
-    def __init__(self, model_name: str = "openai/clip-vit-base-patch32",
-                 cache_dir: Optional[str] = None, device: Optional[str] = None):
-        super().__init__(model_name, cache_dir, device)
-
-        print(f'Loading {model_name} text model.')
-        self.text_model = CLIPTextModel.from_pretrained(model_name, cache_dir=cache_dir)
-        self.feature_dim = self.text_model.config.hidden_size
-
-    def forward(self, inputs: Dict[str, torch.Tensor], **kwargs):
-        """只支持分词后的字典输入"""
-        device = self._get_device()
-        inputs = {k: v.to(device) for k, v in inputs.items()}
-        text_outputs = self.text_model(**inputs)
-        return text_outputs
-
-    def save(self, filename: str):
-        super().save(filename, 'text_model')
-
-    @classmethod
-    def load(cls, filename: str):
-        encoder = super().load(filename)
-        checkpoint = torch.load(filename, map_location='cpu')
-        encoder.text_model.load_state_dict(checkpoint['model_state_dict'])
-        return encoder
-
-
-class ClassificationHead(torch.nn.Linear):
-    """分类头，支持特征归一化（未使用）"""
-
-    def __init__(self, input_size: int, output_size: int, normalize: bool = False, bias: bool = True):
-        super().__init__(input_size, output_size, bias=bias)
-        self.normalize = normalize
-        nn.init.xavier_uniform_(self.weight)
-        if self.bias is not None:
-            nn.init.zeros_(self.bias)
-
-    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
-        if self.normalize:
-            inputs = F.normalize(inputs, dim=-1, p=2)
-        return super().forward(inputs)
-
-    def save(self, filename: str):
-        print(f'Saving classification head to {filename}')
-        torch.save({
-            'state_dict': self.state_dict(),
-            'input_size': self.in_features,
-            'output_size': self.out_features,
-            'normalize': self.normalize,
-            'bias': self.bias is not None
-        }, filename)
-
-    @classmethod
-    def load(cls, filename: str):
-        print(f'Loading classification head from {filename}')
-        checkpoint = torch.load(filename, map_location='cpu')
-        head = cls(
-            input_size=checkpoint['input_size'],
-            output_size=checkpoint['output_size'],
-            normalize=checkpoint['normalize'],
-            bias=checkpoint['bias']
-        )
-        head.load_state_dict(checkpoint['state_dict'])
-        return head
-
-
-class ImageClassifier(torch.nn.Module):
-    """图像分类器，结合编码器和分类头（未使用）"""
-
-    def __init__(self, image_encoder: ImageEncoder, classification_head: ClassificationHead):
-        super().__init__()
-        self.image_encoder = image_encoder
-        self.classification_head = classification_head
-
-    def freeze_encoder(self):
-        for param in self.image_encoder.parameters():
-            param.requires_grad_(False)
-
-    def unfreeze_encoder(self):
-        for param in self.image_encoder.parameters():
-            param.requires_grad_(True)
-
-    def forward(self, inputs):
-        features = self.image_encoder(inputs)
-        return self.classification_head(features)
-
-    def save(self, filename: str):
-        print(f'Saving image classifier to {filename}')
-        torch.save({
-            'image_encoder': self.image_encoder.state_dict(),
-            'classification_head': self.classification_head.state_dict(),
-            'encoder_model_name': self.image_encoder.model_name,
-            'head_config': {
-                'input_size': self.classification_head.in_features,
-                'output_size': self.classification_head.out_features,
-                'normalize': self.classification_head.normalize,
-                'bias': self.classification_head.bias is not None
-            }
-        }, filename)
-
-    @classmethod
-    def load(cls, filename: str):
-        print(f'Loading image classifier from {filename}')
-        checkpoint = torch.load(filename, map_location='cpu')
-
-        image_encoder = ImageEncoder(model_name=checkpoint['encoder_model_name'])
-        image_encoder.load_state_dict(checkpoint['image_encoder'])
-
-        head_config = checkpoint['head_config']
-        classification_head = ClassificationHead(**head_config)
-        classification_head.load_state_dict(checkpoint['classification_head'])
-
-        return cls(image_encoder, classification_head)
 
 
 class FederatedCLIPModel(BaseModel, DeviceMixin):
@@ -245,6 +52,7 @@ class FederatedCLIPModel(BaseModel, DeviceMixin):
         self.cache_dir = cache_dir
         self.lora_config = lora_config or {}
         self.dataset_names = dataset_names
+        self.is_lora_applied = False
 
         # 创建图像编码器
         self.image_encoder = ImageEncoder(
@@ -253,7 +61,7 @@ class FederatedCLIPModel(BaseModel, DeviceMixin):
         )
 
         # 构建分词器
-        self.tokenizer = CLIPTokenizer.from_pretrained(self.model_name, cache_dir=self.cache_dir)
+        self.tokenizer = CLIPTokenizer.from_pretrained(self.model_name, cache_dir=self.cache_dir, use_fast=True)
         # 创建文本编码器（用于构建零样本分类头）
         self.text_encoder = TextEncoder(model_name=self.model_name, cache_dir=self.cache_dir)
 
@@ -272,8 +80,7 @@ class FederatedCLIPModel(BaseModel, DeviceMixin):
         self.classifier.to(device)
 
         # 初始化LoRA包装器
-        self.lora_wrapper = None
-        self._lora_enabled = False
+        self.classifier.lora_model = None
 
         # 设备缓存优化
         self._device_cache = None
@@ -283,19 +90,9 @@ class FederatedCLIPModel(BaseModel, DeviceMixin):
         if freeze_classification_head:
             self.classifier.freeze_head()
 
-        # 尝试使用提供的配置创建优化器
-        self.create_optimizer(self.classifier.parameters())
-
         # 应用LoRA（如果配置中启用）
         if self.lora_config.get('enabled', False) and LORA_AVAILABLE:
             self._setup_lora()
-
-            # LoRA启用后，重新创建优化器以包含LoRA参数和分类头参数
-            if self._lora_enabled:
-                lora_params = [p for p in self.classifier.image_encoder.parameters() if p.requires_grad]
-                classifier_params = [p for p in self.classifier.classification_heads.parameters() if p.requires_grad]
-                all_trainable_params = lora_params + classifier_params
-                self.create_optimizer(all_trainable_params)
 
         # 如果提供了checkpoint路径，加载预训练权重
         if checkpoint_path is not None:
@@ -304,6 +101,9 @@ class FederatedCLIPModel(BaseModel, DeviceMixin):
         # 定义损失函数
         self.criterion = nn.CrossEntropyLoss()
 
+        # 尝试使用提供的配置创建优化器
+        self.create_optimizer(self.classifier.parameters())
+
     def _setup_lora(self):
         """设置LoRA微调"""
         if not LORA_AVAILABLE:
@@ -311,9 +111,6 @@ class FederatedCLIPModel(BaseModel, DeviceMixin):
             return
 
         try:
-            # 创建LoRA包装器
-            self.lora_wrapper = LoRAWrapper(model=self.classifier.image_encoder)
-
             # 简化配置处理
             image_config = {
                 'r': self.lora_config.get('r', 16),
@@ -323,20 +120,14 @@ class FederatedCLIPModel(BaseModel, DeviceMixin):
             }
 
             # 应用LoRA
-            self.lora_wrapper.apply_lora(**image_config)
-            self._lora_enabled = True
-
-            # # 输出关键的LoRA统计信息
-            trainable_params = self.lora_wrapper.get_trainable_parameters()
-            total_original_params = sum(p.numel() for p in self.classifier.image_encoder.parameters())
-
-            print(
-                f"🎯 LoRA设置完成 | 参数效率: {(trainable_params / total_original_params) * 100:.2f}% ({trainable_params:,}/{total_original_params:,})")
+            self.classifier.image_encoder.clip_model = lora_utils.apply_lora(
+                model=self.classifier.image_encoder.clip_model, **image_config)
+            self.is_lora_applied = True
+            self.classifier.is_lora_applied = True
 
         except Exception as e:
             print(f"❌ LoRA设置失败: {e}")
-            self.lora_wrapper = None
-            self._lora_enabled = False
+            self.classifier.image_encoder = self.image_encoder
 
     def to(self, device):
         """将模型移动到指定设备"""
@@ -350,9 +141,9 @@ class FederatedCLIPModel(BaseModel, DeviceMixin):
 
     def get_parameters(self) -> Dict[str, torch.Tensor]:
         """获取模型参数 - 联邦学习核心功能"""
-        if self._lora_enabled and self.lora_wrapper is not None:
+        if self.is_lora_applied and self.classifier.lora_model is not None:
             # LoRA模式：返回LoRA参数
-            return self.lora_wrapper.get_lora_parameters()
+            return lora_utils.get_lora_parameters(self.classifier)
         else:
             # 标准模式：返回图像编码器的可训练参数
             return {
@@ -363,11 +154,10 @@ class FederatedCLIPModel(BaseModel, DeviceMixin):
 
     def set_parameters(self, params: Dict[str, torch.Tensor]):
         """设置模型参数 - 联邦学习核心功能"""
-        # TODO: 这里需要修改，查看参数形状
         params = deepcopy(params)  # 深拷贝参数
-        if self._lora_enabled and self.lora_wrapper is not None:
+        if self.is_lora_applied and self.classifier.lora_model is not None:
             # LoRA模式：设置LoRA参数
-            self.lora_wrapper.set_lora_parameters(params)
+            lora_utils.set_lora_parameters(self.classifier, params)
         else:
             # 标准模式：设置图像编码器参数
             with torch.no_grad():
@@ -385,20 +175,19 @@ class FederatedCLIPModel(BaseModel, DeviceMixin):
                 self._device_cache = torch.device('cpu')
         return self._device_cache
 
-    def train_step(self, data: torch.Tensor, labels: torch.Tensor, dataset_names: Optional[tuple] = None) -> float:
+    def train_step(self, data: torch.Tensor, labels: torch.Tensor, dataset_names: Optional[tuple] = None):
         """单步训练"""
-        self.classifier.train()
+        if self.is_lora_applied:
+            self.classifier.image_encoder.train()
+        else:
+            self.image_encoder.train()
         self.optimizer.zero_grad()
 
-        # device = self._get_model_device()
-        # data, labels = device_manager.move_tensors_to_device(data, labels, device=device)
+        outputs = self.classifier(inputs=data, dataset_name=dataset_names[0])
 
-        outputs = self.classifier(data, dataset_names[0])
         loss = self.criterion(outputs, labels)
         loss.backward()
 
-        # 对图像编码器的梯度进行裁剪，防止梯度爆炸（max_norm=1.0）
-        # torch.nn.utils.clip_grad_norm_(self.image_encoder.parameters(), max_norm=1.0)
         self.optimizer.step()
 
         return loss.item()
@@ -500,30 +289,122 @@ class FederatedCLIPModel(BaseModel, DeviceMixin):
             'trainable_parameters': trainable_params,
             'encoder_feature_dim': self.image_encoder.feature_dim,
             'normalize_features': self.normalize_features,
-            'lora_enabled': self._lora_enabled,
+            'is_lora_applied': self.is_lora_applied,
             'dataset_info': self.classification_head.get_dataset_info()
         }
 
-        if self._lora_enabled and self.lora_wrapper is not None:
+        if self.is_lora_applied and self.classifier.lora_model is not None:
             summary.update({
-                'lora_trainable_parameters': self.lora_wrapper.get_trainable_parameters(),
-                'lora_status': self.lora_wrapper.is_lora_applied()
+                'lora_trainable_parameters': lora_utils.get_trainable_parameters(self.classifier),
+                'lora_status': lora_utils.is_lora_applied(self.classifier)
             })
 
         return summary
 
-    def is_lora_enabled(self) -> bool:
+    def is_lora_applied(self) -> bool:
         """检查是否启用了LoRA"""
-        return self._lora_enabled
+        return self.is_lora_applied
 
     def get_lora_info(self) -> Dict[str, Any]:
         """获取LoRA相关信息"""
-        if not self._lora_enabled or self.lora_wrapper is None:
+        if not self.is_lora_applied or self.classifier.lora_model is None:
             return {'enabled': False}
 
         return {
             'enabled': True,
-            'status': self.lora_wrapper.is_lora_applied(),
-            'trainable_parameters': self.lora_wrapper.get_trainable_parameters(),
+            'status': lora_utils.is_lora_applied(self.classifier),
+            'trainable_parameters': lora_utils.get_trainable_parameters(self.classifier),
             'config': self.lora_config
         }
+
+    # def train(self, mode=True):
+    #     """切换训练/评估模式"""
+    #     self.classifier.train(mode)
+
+
+class ClassificationHead(torch.nn.Linear):
+    """分类头，支持特征归一化（未使用）"""
+
+    def __init__(self, input_size: int, output_size: int, normalize: bool = False, bias: bool = True):
+        super().__init__(input_size, output_size, bias=bias)
+        self.normalize = normalize
+        nn.init.xavier_uniform_(self.weight)
+        if self.bias is not None:
+            nn.init.zeros_(self.bias)
+
+    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+        if self.normalize:
+            inputs = F.normalize(inputs, dim=-1, p=2)
+        return super().forward(inputs)
+
+    def save(self, filename: str):
+        print(f'Saving classification head to {filename}')
+        torch.save({
+            'state_dict': self.state_dict(),
+            'input_size': self.in_features,
+            'output_size': self.out_features,
+            'normalize': self.normalize,
+            'bias': self.bias is not None
+        }, filename)
+
+    @classmethod
+    def load(cls, filename: str):
+        print(f'Loading classification head from {filename}')
+        checkpoint = torch.load(filename, map_location='cpu')
+        head = cls(
+            input_size=checkpoint['input_size'],
+            output_size=checkpoint['output_size'],
+            normalize=checkpoint['normalize'],
+            bias=checkpoint['bias']
+        )
+        head.load_state_dict(checkpoint['state_dict'])
+        return head
+
+
+class ImageClassifier(torch.nn.Module):
+    """图像分类器，结合编码器和分类头（未使用）"""
+
+    def __init__(self, image_encoder: ImageEncoder, classification_head: ClassificationHead):
+        super().__init__()
+        self.image_encoder = image_encoder
+        self.classification_head = classification_head
+
+    def freeze_encoder(self):
+        for param in self.image_encoder.parameters():
+            param.requires_grad_(False)
+
+    def unfreeze_encoder(self):
+        for param in self.image_encoder.parameters():
+            param.requires_grad_(True)
+
+    def forward(self, inputs):
+        features = self.image_encoder(inputs)
+        return self.classification_head(features)
+
+    def save(self, filename: str):
+        print(f'Saving image classifier to {filename}')
+        torch.save({
+            'image_encoder': self.image_encoder.state_dict(),
+            'classification_head': self.classification_head.state_dict(),
+            'encoder_model_name': self.image_encoder.model_name,
+            'head_config': {
+                'input_size': self.classification_head.in_features,
+                'output_size': self.classification_head.out_features,
+                'normalize': self.classification_head.normalize,
+                'bias': self.classification_head.bias is not None
+            }
+        }, filename)
+
+    @classmethod
+    def load(cls, filename: str):
+        print(f'Loading image classifier from {filename}')
+        checkpoint = torch.load(filename, map_location='cpu')
+
+        image_encoder = ImageEncoder(model_name=checkpoint['encoder_model_name'])
+        image_encoder.load_state_dict(checkpoint['image_encoder'])
+
+        head_config = checkpoint['head_config']
+        classification_head = ClassificationHead(**head_config)
+        classification_head.load_state_dict(checkpoint['classification_head'])
+
+        return cls(image_encoder, classification_head)

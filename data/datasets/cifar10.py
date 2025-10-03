@@ -3,6 +3,7 @@
 每个数据集类都封装了从加载、转换到访问单个数据项的所有逻辑。
 这种设计使得在联邦学习设置中添加新数据集变得简单。
 """
+from data.transform import UnifiedTransform
 from torch.utils.data import Dataset
 from torchvision import datasets, transforms
 
@@ -33,7 +34,7 @@ class CIFAR10(Dataset):
                 transforms.ToTensor(),
                 transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
             ])
-
+        transform = UnifiedTransform(target_size=224)
         self.dataset = datasets.CIFAR10(
             root=data_root,
             train=train,
