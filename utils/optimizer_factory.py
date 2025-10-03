@@ -5,13 +5,14 @@
 
 import torch.optim as optim
 from typing import Dict, Any
+from utils.config_manager import Config
 
 
 class OptimizerFactory:
     """优化器工厂类 - 统一使用AdamW"""
 
     @classmethod
-    def create_optimizer(cls, model_parameters, config: Dict[str, Any]):
+    def create_optimizer(cls, model_parameters):
         """
         创建AdamW优化器
         
@@ -23,13 +24,13 @@ class OptimizerFactory:
             配置好的AdamW优化器实例
         """
         # 默认AdamW参数，确保类型转换
-        learning_rate = float(config.get('learning_rate', 0.001))
-        weight_decay = float(config.get('weight_decay', 0.01))
-        betas = config.get('betas', [0.9, 0.999])
+        learning_rate = float(Config.config['learning_rates'].get('model', 0.001))
+        weight_decay = float(Config.config['optimizer'].get('weight_decay', 0.01))
+        betas = Config.config['optimizer'].get('betas', [0.9, 0.999])
         # 确保betas中的值都是浮点数
         if isinstance(betas, list):
             betas = [float(b) for b in betas]
-        eps = float(config.get('eps', 0.00000001))
+        eps = float(Config.config['optimizer'].get('eps', 0.00000001))
 
         return optim.AdamW(
             model_parameters,

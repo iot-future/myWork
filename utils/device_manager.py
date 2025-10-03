@@ -6,6 +6,8 @@
 import torch
 import warnings
 from typing import Union, Optional, Dict, Any, Tuple
+
+
 class DeviceMixin:
     """设备管理mixin，提供设备缓存和移动功能"""
 
@@ -32,22 +34,22 @@ class DeviceMixin:
 
 class DeviceManager:
     """设备管理器 - 统一管理GPU/CPU设备相关操作"""
-    
+
     _instance = None
-    
+
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
             cls._instance._initialized = False
         return cls._instance
-    
+
     def __init__(self):
         if self._initialized:
             return
-            
+
         self._current_device = None
         self._initialized = True
-    
+
     def get_optimal_device(self, preference: str = 'auto') -> torch.device:
         """获取最优设备"""
         if preference == 'auto':
@@ -65,15 +67,14 @@ class DeviceManager:
                 device = torch.device('cpu')
         else:
             device = torch.device('cpu')
-        
+
         self._current_device = device
         return device
-    
-    
+
     def move_model_to_device(self, model, device: Optional[torch.device] = None):
         """将模型移动到指定设备"""
         target_device = device or self._current_device or self.get_optimal_device()
-        
+
         try:
             # 检查是否是 BaseModel 实例
             if hasattr(model, 'model') and hasattr(model.model, 'to'):
@@ -93,10 +94,12 @@ class DeviceManager:
             if hasattr(model, 'model') and hasattr(model.model, 'to'):
                 model.model = model.model.to('cpu')
             return model
-    
-    def move_tensors_to_device(self, *tensors: torch.Tensor, device: Optional[torch.device] = None) -> Union[torch.Tensor, Tuple[torch.Tensor, ...]]:
+
+    def move_tensors_to_device(self, *tensors: torch.Tensor, device: Optional[torch.device] = None) -> Union[
+        torch.Tensor, Tuple[torch.Tensor, ...]]:
         """将张量移动到指定设备"""
         target_device = device or self._current_device or self.get_optimal_device()
+
         def move(tensor):
             if isinstance(tensor, torch.Tensor):
                 try:
@@ -104,9 +107,10 @@ class DeviceManager:
                 except Exception:
                     return tensor.to('cpu')
             return tensor
+
         moved_tensors = [move(t) for t in tensors]
         return moved_tensors[0] if len(moved_tensors) == 1 else tuple(moved_tensors)
-    
+
     def get_current_device(self) -> Optional[torch.device]:
         """获取当前设备"""
         return self._current_device
